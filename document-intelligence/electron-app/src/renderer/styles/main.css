@@ -1,0 +1,338 @@
+/*
+ * Главные стили приложения Document Intelligence.
+ *
+ * Структура:
+ * - CSS-переменные (цвета, отступы) — легко менять тему
+ * - Базовые стили
+ * - Sidebar (боковая панель)
+ * - Content (основная область)
+ * - Компоненты (карточки, кнопки, бейджи)
+ */
+
+/* === CSS-переменные === */
+:root {
+    --bg-primary: #1a1a2e;
+    --bg-secondary: #16213e;
+    --bg-card: #1e2a4a;
+    --bg-hover: #2a3a5e;
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0b0;
+    --text-muted: #6c6c7e;
+    --accent: #4fc3f7;
+    --accent-hover: #29b6f6;
+    --success: #66bb6a;
+    --warning: #ffa726;
+    --error: #ef5350;
+    --border: #2a2a4a;
+    --sidebar-width: 240px;
+    --radius: 8px;
+    --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* === Базовые стили === */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden;
+    height: 100vh;
+}
+
+.app {
+    display: flex;
+    height: 100vh;
+}
+
+/* === Sidebar === */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: var(--bg-secondary);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+}
+
+.sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+}
+
+.logo {
+    font-size: 1.3em;
+    color: var(--accent);
+    margin-bottom: 4px;
+}
+
+.version {
+    font-size: 0.75em;
+    color: var(--text-muted);
+}
+
+.nav-menu {
+    list-style: none;
+    padding: 10px 0;
+    flex: 1;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-left: 3px solid transparent;
+}
+
+.nav-item:hover {
+    background-color: var(--bg-hover);
+}
+
+.nav-item.active {
+    background-color: var(--bg-hover);
+    border-left-color: var(--accent);
+}
+
+.nav-item.active .nav-text {
+    color: var(--accent);
+}
+
+.nav-icon {
+    font-size: 1.2em;
+    margin-right: 12px;
+    width: 24px;
+    text-align: center;
+}
+
+.nav-text {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+/* === Content === */
+.content {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+}
+
+.page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+h2 {
+    font-size: 1.8em;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+}
+
+.subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    font-size: 0.95em;
+}
+
+/* === Status Cards === */
+.status-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.status-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: var(--shadow);
+    transition: transform 0.2s ease;
+}
+
+.status-card:hover {
+    transform: translateY(-2px);
+}
+
+.status-icon {
+    font-size: 2em;
+}
+
+.status-info h3 {
+    font-size: 0.95em;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+}
+
+/* === Status Badge === */
+.status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.78em;
+    font-weight: 600;
+}
+
+.status-badge.checking {
+    background: rgba(255, 167, 38, 0.2);
+    color: var(--warning);
+}
+
+.status-badge.healthy {
+    background: rgba(102, 187, 106, 0.2);
+    color: var(--success);
+}
+
+.status-badge.error {
+    background: rgba(239, 83, 80, 0.2);
+    color: var(--error);
+}
+
+.status-badge.unavailable {
+    background: rgba(108, 108, 126, 0.2);
+    color: var(--text-muted);
+}
+
+/* === Buttons === */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background: var(--accent);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* === Result Box === */
+.result-box {
+    margin-top: 20px;
+    padding: 16px;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    border-left: 4px solid var(--accent);
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.85em;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.result-box.success {
+    border-left-color: var(--success);
+}
+
+.result-box.error {
+    border-left-color: var(--error);
+}
+
+/* === Placeholder === */
+.placeholder-box {
+    background: var(--bg-card);
+    border: 2px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 60px 40px;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.placeholder-icon {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 16px;
+}
+
+.text-muted {
+    color: var(--text-muted);
+    font-size: 0.85em;
+}
+
+/* === Settings === */
+.settings-group {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 24px;
+    max-width: 500px;
+}
+
+.settings-group h3 {
+    margin-bottom: 16px;
+    color: var(--text-primary);
+    font-size: 1.1em;
+}
+
+.setting-item {
+    margin-bottom: 16px;
+}
+
+.setting-item label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.85em;
+    color: var(--text-secondary);
+}
+
+.setting-item input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-size: 0.9em;
+}
+
+.setting-item input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.setting-item small {
+    display: block;
+    margin-top: 4px;
+}
+
+/* === Scrollbar === */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}

@@ -1,0 +1,5 @@
+# Created at 2026-10-12T17:03:17.310
+Boot Manifest-JAR contains absolute paths in classpath 'A:\Документум\Documentum\document-intelligence\java-backend\target\test-classes'
+Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
+'other' has different root
+

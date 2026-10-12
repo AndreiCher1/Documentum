@@ -1,0 +1,24 @@
+# Основная конфигурация Java Backend
+
+server:
+  port: ${SERVER_PORT:8085}
+
+# Настройки загрузки файлов
+spring:
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+# URL Python AI-сервиса
+ai:
+  service:
+    url: ${AI_SERVICE_URL:http://localhost:8000}
+
+# Логирование
+logging:
+  level:
+    com.docintell: DEBUG
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

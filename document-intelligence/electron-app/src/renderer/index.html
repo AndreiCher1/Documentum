@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <!--
+        Content-Security-Policy (CSP) — ещё один уровень безопасности.
+
+        Эта мета-директива говорит браузеру (Electron):
+        - default-src 'self' — загружай ресурсы только из текущего приложения
+        - script-src 'self' — выполняй скрипты только из текущего приложения
+        - connect-src 'self' http://localhost:* — разрешай сетевые запросы
+          только к localhost (наш Java backend)
+        - style-src 'self' 'unsafe-inline' — разрешай стили из приложения
+          и inline-стили (для удобства разработки)
+
+        Это предотвращает:
+        - Загрузку скриптов с внешних сайтов
+        - XSS-атаки
+        - Утечку данных на внешние серверы
+    -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self'; connect-src 'self' http://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Intelligence</title>
+    <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Боковая панель навигации -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="logo">📄 DocIntel</h1>
+                <span class="version">v0.1.0</span>
+            </div>
+            <ul class="nav-menu">
+                <li class="nav-item active" data-page="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Dashboard</span>
+                </li>
+                <li class="nav-item" data-page="upload">
+                    <span class="nav-icon">📤</span>
+                    <span class="nav-text">Загрузка</span>
+                </li>
+                <li class="nav-item" data-page="documents">
+                    <span class="nav-icon">📁</span>
+                    <span class="nav-text">Документы</span>
+                </li>
+                <li class="nav-item" data-page="search">
+                    <span class="nav-icon">🔍</span>
+                    <span class="nav-text">Поиск</span>
+                </li>
+                <li class="nav-item" data-page="settings">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">Настройки</span>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Основная область контента -->
+        <main class="content">
+            <!-- Dashboard -->
+            <div id="page-dashboard" class="page active">
+                <h2>Dashboard</h2>
+                <p class="subtitle">Состояние системы</p>
+
+                <div class="status-cards">
+                    <div class="status-card" id="status-java">
+                        <div class="status-icon">☕</div>
+                        <div class="status-info">
+                            <h3>Java Backend</h3>
+                            <span class="status-badge checking">Проверка...</span>
+                        </div>
+                    </div>
+                    <div class="status-card" id="status-ai">
+                        <div class="status-icon">🤖</div>
+                        <div class="status-info">
+                            <h3>AI Service</h3>
+                            <span class="status-badge checking">Проверка...</span>
+                        </div>
+                    </div>
+                    <div class="status-card" id="status-db">
+                        <div class="status-icon">🗄️</div>
+                        <div class="status-info">
+                            <h3>PostgreSQL</h3>
+                            <span class="status-badge checking">Проверка...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" id="btn-check-health">
+                    🔄 Проверить связь
+                </button>
+
+                <div id="health-result" class="result-box" style="display: none;"></div>
+            </div>
+
+            <!-- Upload -->
+            <div id="page-upload" class="page">
+                <h2>Загрузка документа</h2>
+                <p class="subtitle">Будет доступна на этапе 4</p>
+                <div class="placeholder-box">
+                    <span class="placeholder-icon">📤</span>
+                    <p>Перетащите файл сюда или нажмите для выбора</p>
+                    <p class="text-muted">Поддерживаемые форматы: JPEG, PNG, PDF</p>
+                </div>
+            </div>
+
+            <!-- Documents -->
+            <div id="page-documents" class="page">
+                <h2>Документы</h2>
+                <p class="subtitle">Будет доступна на этапе 4</p>
+                <div class="placeholder-box">
+                    <span class="placeholder-icon">📁</span>
+                    <p>Загруженные документы появятся здесь</p>
+                </div>
+            </div>
+
+            <!-- Search -->
+            <div id="page-search" class="page">
+                <h2>Поиск</h2>
+                <p class="subtitle">Будет доступен на этапе 10</p>
+                <div class="placeholder-box">
+                    <span class="placeholder-icon">🔍</span>
+                    <p>Поиск документов будет доступен после подключения БД</p>
+                </div>
+            </div>
+
+            <!-- Settings -->
+            <div id="page-settings" class="page">
+                <h2>Настройки</h2>
+                <div class="settings-group">
+                    <h3>Подключение</h3>
+                    <div class="setting-item">
+                        <label>Java Backend URL</label>
+                        <input type="text" id="setting-backend-url" value="http://localhost:8085" />
+                    </div>
+                    <div class="setting-item">
+                        <label>AI Service URL</label>
+                        <input type="text" id="setting-ai-url" value="http://localhost:8000" readonly />
+                        <small class="text-muted">Управляется через Java Backend</small>
+                    </div>
+                    <button class="btn btn-primary" id="btn-save-settings">💾 Сохранить</button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="scripts/api.js"></script>
+    <script src="scripts/app.js"></script>
+</body>
+</html>
