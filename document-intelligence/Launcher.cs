@@ -32,7 +32,7 @@ namespace DocIntelLauncher
 
             ProcessStartInfo psi = new ProcessStartInfo();
             psi.FileName = "cmd.exe";
-            psi.Arguments = "/c chcp 65001 >nul && call \"" + batPath + "\"";
+            psi.Arguments = "/c call \"" + batPath + "\"";
             psi.WorkingDirectory = workingDir;
             psi.UseShellExecute = false;
             psi.CreateNoWindow = true;
