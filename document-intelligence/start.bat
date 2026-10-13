@@ -58,7 +58,7 @@ set ELECTRON_RUN_AS_NODE=
 call npm start
 
 echo.
-echo Приложение закрыто. Остановка фоновых сервисов...
+echo Остановка фоновых сервисов...
 call "%ROOT_DIR%stop.bat"
 exit /b 0
 
