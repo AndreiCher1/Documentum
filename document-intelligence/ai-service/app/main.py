@@ -188,26 +188,34 @@ async def analyze_document(file: UploadFile = File(...)):
     logger.info(f"Извлечено структурированных полей: {len(extracted_fields)}")
 
     # 5.1 Извлечение таблиц и сложных структур (Этап 8: Document Understanding)
-    table_extractor = TableExtractor()
-    extracted_tables = table_extractor.extract_tables(
-        images=[p.processed_image for p in prep_result.pages],
-        ocr_blocks=all_ocr_results
-    )
-    for tbl in extracted_tables:
-        t_title = f"Таблица {tbl.table_id}" if len(extracted_tables) > 1 else "Таблица товаров и услуг"
-        extracted_fields.append(
-            ExtractedField(
-                name=f"table_{tbl.table_id}",
-                display_name=t_title,
-                value=table_extractor.to_field_value(tbl),
-                field_type="TABLE",
-                confidence=round(tbl.confidence, 4),
-                bbox=tbl.bbox,
-                page=tbl.page
-            )
+    # Таблицы (товары, спецификации, счета) извлекаются для коммерческих и учетных документов.
+    # В удостоверениях личности (паспорт, водительское, СНИЛС, ИНН) таблиц не бывает,
+    # а защитные сетки и рамки фото не должны ошибочно определяться как "Таблица товаров и услуг".
+    NON_TABLE_DOC_TYPES = {
+        "PASSPORT_RF", "PASSPORT", "DRIVER_LICENSE", "SNILS", "INN", "CERTIFICATE"
+    }
+    extracted_tables = []
+    if class_result.predicted_type not in NON_TABLE_DOC_TYPES:
+        table_extractor = TableExtractor()
+        extracted_tables = table_extractor.extract_tables(
+            images=[p.processed_image for p in prep_result.pages],
+            ocr_blocks=all_ocr_results
         )
-    if extracted_tables:
-        logger.info(f"Извлечено таблиц: {len(extracted_tables)}")
+        for tbl in extracted_tables:
+            t_title = f"Таблица {tbl.table_id}" if len(extracted_tables) > 1 else "Таблица товаров и услуг"
+            extracted_fields.append(
+                ExtractedField(
+                    name=f"table_{tbl.table_id}",
+                    display_name=t_title,
+                    value=table_extractor.to_field_value(tbl),
+                    field_type="TABLE",
+                    confidence=round(tbl.confidence, 4),
+                    bbox=tbl.bbox,
+                    page=tbl.page
+                )
+            )
+        if extracted_tables:
+            logger.info(f"Извлечено таблиц: {len(extracted_tables)}")
 
     # 5.2 Валидация бизнес-правил документа (Этап 9: Business Rules Validation)
     val_report = validation_engine.validate(

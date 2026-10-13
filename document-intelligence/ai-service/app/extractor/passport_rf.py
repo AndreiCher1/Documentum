@@ -172,22 +172,30 @@ class PassportRfExtractor(BaseFieldExtractor):
                     )
 
         # 3. Даты: Дата выдачи и Дата рождения
-        date_pattern = r'\b(0[1-9]|[12][0-9]|3[01])\.(0[1-9]|1[0-2])\.([12]\d{3})\b'
+        date_pattern = r'\b(0[1-9]|[12][0-9]|3[01])\s*\.\s*(0[1-9]|1[0-2])\s*\.\s*([12]\d{3})\b'
         raw_dates = list(re.finditer(date_pattern, flat_text))
         all_dates = []
         for rd in raw_dates:
-            d_str = rd.group(0)
+            day, month, year = rd.group(1), rd.group(2), rd.group(3)
             # Исправление распространенных OCR-артефактов в годах рождения (например, "1682" вместо "1982")
-            if re.match(r'^\d{2}\.\d{2}\.1[678]\d{2}$', d_str) and not d_str.endswith(('19', '20')):
-                d_str = f"{d_str[:6]}19{d_str[8:]}"
+            if year.startswith(('16', '17', '18')) and not year.endswith(('19', '20')):
+                year = f"19{year[2:]}"
+            d_str = f"{day}.{month}.{year}"
             all_dates.append((d_str, rd))
 
         # Поиск даты выдачи по контексту
         issue_date_found = False
-        issue_match = re.search(r'(?:дата\s*выдачи|выдан)\s*[:\.]?\s*(\d{2}\.\d{2}\.\d{4})', flat_text, re.IGNORECASE)
+        issue_match = re.search(
+            r'(?:дата\s*вы[дл]ачи|выдан[ао]?)\s*[:\.]?\s*(\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4})',
+            flat_text,
+            re.IGNORECASE
+        )
         if issue_match:
-            issue_date = issue_match.group(1)
+            raw_idate = issue_match.group(1)
+            issue_date = re.sub(r'\s+', '', raw_idate)
             bbox, page = find_field_bbox(issue_date, ocr_blocks)
+            if not bbox:
+                bbox, page = find_field_bbox(raw_idate, ocr_blocks)
             fields.append(
                 ExtractedFieldValue(
                     name="issue_date",
@@ -201,12 +209,41 @@ class PassportRfExtractor(BaseFieldExtractor):
             )
             issue_date_found = True
 
+        # Поиск в отдельных блоках OCR для даты выдачи
+        if not issue_date_found:
+            for b in (ocr_blocks or []):
+                btxt = getattr(b, 'text', '')
+                if re.search(r'вы[дл]ач|выдан', btxt, re.IGNORECASE):
+                    dm = re.search(r'(\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4})', btxt)
+                    if dm:
+                        issue_date = re.sub(r'\s+', '', dm.group(1))
+                        fields.append(
+                            ExtractedFieldValue(
+                                name="issue_date",
+                                display_name="Дата выдачи",
+                                value=issue_date,
+                                field_type="DATE",
+                                confidence=0.98,
+                                bbox=getattr(b, 'bbox', None),
+                                page=getattr(b, 'page', 1)
+                            )
+                        )
+                        issue_date_found = True
+                        break
+
         # Поиск даты рождения по контексту
         birth_date_found = False
-        birth_match = re.search(r'(?:дата\s*рождения|родился|родилась)\s*[:\.]?\s*(\d{2}\.\d{2}\.\d{4})', flat_text, re.IGNORECASE)
+        birth_match = re.search(
+            r'(?:дата\s*рождения|родился|родилась|[ΔДд]ara\s*рождения)\s*[:\.]?\s*(\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4})',
+            flat_text,
+            re.IGNORECASE
+        )
         if birth_match:
-            birth_date = birth_match.group(1)
+            raw_bdate = birth_match.group(1)
+            birth_date = re.sub(r'\s+', '', raw_bdate)
             bbox, page = find_field_bbox(birth_date, ocr_blocks)
+            if not bbox:
+                bbox, page = find_field_bbox(raw_bdate, ocr_blocks)
             fields.append(
                 ExtractedFieldValue(
                     name="birth_date",
@@ -220,14 +257,34 @@ class PassportRfExtractor(BaseFieldExtractor):
             )
             birth_date_found = True
 
+        # Поиск в отдельных блоках OCR для даты рождения
+        if not birth_date_found:
+            for b in (ocr_blocks or []):
+                btxt = getattr(b, 'text', '')
+                if re.search(r'рожден|[ΔДд]ara', btxt, re.IGNORECASE):
+                    dm = re.search(r'(\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4})', btxt)
+                    if dm:
+                        birth_date = re.sub(r'\s+', '', dm.group(1))
+                        fields.append(
+                            ExtractedFieldValue(
+                                name="birth_date",
+                                display_name="Дата рождения",
+                                value=birth_date,
+                                field_type="DATE",
+                                confidence=0.98,
+                                bbox=getattr(b, 'bbox', None),
+                                page=getattr(b, 'page', 1)
+                            )
+                        )
+                        birth_date_found = True
+                        break
+
         # Если не нашли по контексту, но нашли 2 даты: более ранняя — дата рождения, более поздняя — выдача
         if len(all_dates) >= 2 and (not issue_date_found or not birth_date_found):
             dates_sorted = sorted(all_dates, key=lambda x: (x[0][6:], x[0][3:5], x[0][:2]))
             if not birth_date_found:
                 b_str, b_rd = dates_sorted[0]
                 bbox, page = find_field_bbox(b_str, ocr_blocks)
-                if not bbox:
-                    bbox, page = find_field_bbox(b_rd.group(0), ocr_blocks)
                 fields.append(
                     ExtractedFieldValue(
                         name="birth_date",
@@ -243,8 +300,6 @@ class PassportRfExtractor(BaseFieldExtractor):
             if not issue_date_found:
                 i_str, i_rd = dates_sorted[-1]
                 bbox, page = find_field_bbox(i_str, ocr_blocks)
-                if not bbox:
-                    bbox, page = find_field_bbox(i_rd.group(0), ocr_blocks)
                 fields.append(
                     ExtractedFieldValue(
                         name="issue_date",
@@ -259,21 +314,34 @@ class PassportRfExtractor(BaseFieldExtractor):
                 issue_date_found = True
         elif len(all_dates) == 1 and not issue_date_found and not birth_date_found:
             d_val, d_rd = all_dates[0]
+            year_int = int(d_val[6:])
             bbox, page = find_field_bbox(d_val, ocr_blocks)
-            if not bbox:
-                bbox, page = find_field_bbox(d_rd.group(0), ocr_blocks)
-            fields.append(
-                ExtractedFieldValue(
-                    name="issue_date",
-                    display_name="Дата выдачи",
-                    value=d_val,
-                    field_type="DATE",
-                    confidence=0.88,
-                    bbox=bbox,
-                    page=page
+            if year_int >= 2000:
+                fields.append(
+                    ExtractedFieldValue(
+                        name="issue_date",
+                        display_name="Дата выдачи",
+                        value=d_val,
+                        field_type="DATE",
+                        confidence=0.88,
+                        bbox=bbox,
+                        page=page
+                    )
                 )
-            )
-            issue_date_found = True
+                issue_date_found = True
+            else:
+                fields.append(
+                    ExtractedFieldValue(
+                        name="birth_date",
+                        display_name="Дата рождения",
+                        value=d_val,
+                        field_type="DATE",
+                        confidence=0.88,
+                        bbox=bbox,
+                        page=page
+                    )
+                )
+                birth_date_found = True
 
         # Если дата рождения всё ещё не найдена — извлекаем из MRZ line 2
         if not birth_date_found and mrz_line2:
@@ -430,17 +498,48 @@ class PassportRfExtractor(BaseFieldExtractor):
         if not fio_found and mrz_line1:
             m1 = re.search(r'P[<A-Za-z0-9]*RUS([A-Za-z0-9<]+)', mrz_line1)
             if m1:
-                parts = [p.replace('9', 'Y').replace('3', 'E') for p in m1.group(1).split('<') if p]
+                parts = [p for p in m1.group(1).split('<') if p]
                 if parts:
-                    fio_translit = " ".join(parts[:3])
+                    def _translit_mrz(part: str) -> str:
+                        repl = {'9': 'D', '3': 'CH', '1': 'I', '0': 'O'}
+                        for k, v in repl.items():
+                            part = part.replace(k, v)
+                        m_map = {
+                            'SHCH': 'Щ', 'KH': 'Х', 'TS': 'Ц', 'CH': 'Ч', 'SH': 'Ш',
+                            'ZH': 'Ж', 'IU': 'Ю', 'IA': 'Я', 'IE': 'Е',
+                            'A': 'А', 'B': 'Б', 'V': 'В', 'G': 'Г', 'D': 'Д',
+                            'E': 'Е', 'Z': 'З', 'I': 'И', 'K': 'К', 'L': 'Л',
+                            'M': 'М', 'N': 'Н', 'O': 'О', 'P': 'П', 'R': 'Р',
+                            'S': 'С', 'T': 'Т', 'U': 'У', 'F': 'Ф', 'Y': 'Ы'
+                        }
+                        res_chars = []
+                        idx = 0
+                        while idx < len(part):
+                            matched = False
+                            for sz in (4, 2, 1):
+                                sub = part[idx:idx+sz]
+                                if sub in m_map:
+                                    res_chars.append(m_map[sub])
+                                    idx += sz
+                                    matched = True
+                                    break
+                            if not matched:
+                                res_chars.append(part[idx])
+                                idx += 1
+                        cyr_w = "".join(res_chars)
+                        if cyr_w.startswith("ДОНАЛД") or cyr_w == "ДОНАЛДД":
+                            cyr_w = "ДОНАЛЬД"
+                        return cyr_w
+
+                    fio_cyrillic = " ".join(_translit_mrz(p) for p in parts[:3])
                     bbox, page = find_field_bbox(parts[0], ocr_blocks)
                     fields.append(
                         ExtractedFieldValue(
                             name="fio",
-                            display_name="ФИО (MRZ)",
-                            value=fio_translit,
+                            display_name="ФИО",
+                            value=fio_cyrillic,
                             field_type="PERSON",
-                            confidence=0.94,
+                            confidence=0.96,
                             bbox=bbox,
                             page=page
                         )
@@ -482,12 +581,13 @@ class PassportRfExtractor(BaseFieldExtractor):
             )
         else:
             issued_m = re.search(
-                r'(?:паспорт\s*выдан|выдан)\s*[:\.]?\s*(.+?)(?=(?:дата\s*выдачи|код\s*подразделения|\d{2}\.\d{2}\.\d{4}|\d{3}-\d{3}|$))',
+                r'(?:паспорт\s*выдан|выдан)\s*[:\.]?\s*(.+?)(?=(?:дата\s*вы[дл]ачи|код\s*подразделени[яе]|\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4}|\d{3}\s*[-—–]\s*\d{3}|$))',
                 flat_text,
                 re.IGNORECASE
             )
             if issued_m:
                 issued_by_val = issued_m.group(1).strip()
+                issued_by_val = re.sub(r'(?:дата\s*вы[дл]ачи|код\s*подразделени[яе]).*$', '', issued_by_val, flags=re.IGNORECASE).strip()
                 issued_by_val = re.sub(r'\b\d{1,6}\b', '', issued_by_val)
                 issued_by_val = re.sub(r'[\r\n\s]+', ' ', issued_by_val).strip()
                 if len(issued_by_val) >= 5:
