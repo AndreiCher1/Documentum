@@ -15,10 +15,19 @@ package com.docintell.enums;
 public enum DocumentType {
     PASSPORT("Паспорт РФ"),
     PTS("Паспорт ТС (ПТС)"),
+    STS("Свидетельство о регистрации ТС (СТС)"),
+    DRIVER_LICENSE("Водительское удостоверение"),
+    SNILS("СНИЛС"),
+    INN("Свидетельство ИНН"),
     CONTRACT("Договор"),
     INVOICE("Счёт на оплату"),
     RECEIPT("Квитанция / Счёт ЖКУ"),
     ACT("Акт выполненных работ"),
+    CASH_RECEIPT("Кассовый чек"),
+    BANK_STATEMENT("Банковская выписка"),
+    TECH_PASSPORT("Техпаспорт оборудования"),
+    MEDICAL_REPORT("Медицинские анализы / Заключение"),
+    LEGAL_HR("Судебный / Кадровый документ"),
     TAX_2NDFL("Справка 2-НДФЛ"),
     CERTIFICATE("Свидетельство / Справка"),
     APPLICATION("Заявление"),
@@ -48,6 +57,33 @@ public enum DocumentType {
         String normalized = value.trim().toUpperCase();
         if (normalized.equals("PTS") || normalized.equals("VEHICLE_PASSPORT")) {
             return PTS;
+        }
+        if (normalized.equals("STS") || normalized.equals("VEHICLE_REGISTRATION")) {
+            return STS;
+        }
+        if (normalized.equals("DRIVER_LICENSE") || normalized.equals("DRIVING_LICENSE") || normalized.equals("DRIVER_LICENCE")) {
+            return DRIVER_LICENSE;
+        }
+        if (normalized.equals("SNILS")) {
+            return SNILS;
+        }
+        if (normalized.equals("INN") || normalized.equals("INN_CERTIFICATE")) {
+            return INN;
+        }
+        if (normalized.equals("CASH_RECEIPT") || normalized.equals("FISCAL_RECEIPT") || normalized.equals("CHECK")) {
+            return CASH_RECEIPT;
+        }
+        if (normalized.equals("BANK_STATEMENT") || normalized.equals("ACCOUNT_STATEMENT")) {
+            return BANK_STATEMENT;
+        }
+        if (normalized.equals("TECH_PASSPORT") || normalized.equals("TECHNICAL_PASSPORT")) {
+            return TECH_PASSPORT;
+        }
+        if (normalized.equals("MEDICAL_REPORT") || normalized.equals("LAB_REPORT") || normalized.equals("MEDICAL_ANALYSIS")) {
+            return MEDICAL_REPORT;
+        }
+        if (normalized.equals("LEGAL_HR") || normalized.equals("COURT_DECISION") || normalized.equals("ORDER")) {
+            return LEGAL_HR;
         }
         if (normalized.equals("PASSPORT_RF") || normalized.equals("PASSPORT")) {
             return PASSPORT;

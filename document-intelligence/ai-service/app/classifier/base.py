@@ -24,10 +24,19 @@ class DocumentCategory(str, Enum):
     """Категории документов, распознаваемые системой."""
     PASSPORT_RF = "PASSPORT_RF"
     PTS = "PTS"
+    STS = "STS"
+    DRIVER_LICENSE = "DRIVER_LICENSE"
+    SNILS = "SNILS"
+    INN = "INN"
     CONTRACT = "CONTRACT"
     INVOICE = "INVOICE"
     RECEIPT = "RECEIPT"
     ACT = "ACT"
+    CASH_RECEIPT = "CASH_RECEIPT"
+    BANK_STATEMENT = "BANK_STATEMENT"
+    TECH_PASSPORT = "TECH_PASSPORT"
+    MEDICAL_REPORT = "MEDICAL_REPORT"
+    LEGAL_HR = "LEGAL_HR"
     TAX_2NDFL = "TAX_2NDFL"
     UNKNOWN = "UNKNOWN"
 
@@ -37,10 +46,19 @@ class DocumentCategory(str, Enum):
         names = {
             self.PASSPORT_RF: "Паспорт РФ",
             self.PTS: "Паспорт ТС (ПТС)",
+            self.STS: "Свидетельство о регистрации ТС (СТС)",
+            self.DRIVER_LICENSE: "Водительское удостоверение",
+            self.SNILS: "Страховое свидетельство (СНИЛС)",
+            self.INN: "Свидетельство ИНН",
             self.CONTRACT: "Договор",
-            self.INVOICE: "Счёт на оплату",
+            self.INVOICE: "Счёт на оплату / УПД",
             self.RECEIPT: "Квитанция / Счёт ЖКУ",
             self.ACT: "Акт выполненных работ",
+            self.CASH_RECEIPT: "Кассовый чек",
+            self.BANK_STATEMENT: "Банковская выписка",
+            self.TECH_PASSPORT: "Технический паспорт оборудования",
+            self.MEDICAL_REPORT: "Медицинские анализы / Заключение",
+            self.LEGAL_HR: "Судебное решение / Приказ / Заявление",
             self.TAX_2NDFL: "Справка 2-НДФЛ",
             self.UNKNOWN: "Не определён"
         }

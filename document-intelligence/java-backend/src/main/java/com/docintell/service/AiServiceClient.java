@@ -179,4 +179,18 @@ public class AiServiceClient {
             throw new RuntimeException("Не удалось запустить эксперимент: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * Задать вопрос к документу через вопросно-ответную систему AI-сервиса (Document Q&A).
+     */
+    public com.docintell.dto.ai.AskQuestionResponseDto askQuestion(com.docintell.dto.ai.AskQuestionRequestDto request) {
+        try {
+            String url = aiServiceUrl + "/qa/ask";
+            logger.info("Отправка вопроса к документу в AI-сервис: '{}'", request.question());
+            return restTemplate.postForObject(url, request, com.docintell.dto.ai.AskQuestionResponseDto.class);
+        } catch (Exception e) {
+            logger.error("Ошибка вызова /qa/ask: {}", e.getMessage(), e);
+            throw new RuntimeException("Ошибка вопросно-ответного сервиса: " + e.getMessage(), e);
+        }
+    }
 }

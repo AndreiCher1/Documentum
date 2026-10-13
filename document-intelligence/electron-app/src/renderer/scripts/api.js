@@ -305,6 +305,29 @@ const ApiClient = {
     },
 
     /**
+     * Задать вопрос к документу (POST /api/documents/{id}/ask).
+     * @param {number} id — ID документа
+     * @param {string} question — текст вопроса
+     */
+    async askQuestion(id, question) {
+        const response = await fetch(`${this.baseUrl}/api/documents/${id}/ask`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ question })
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `Ошибка вопросно-ответной системы (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
      * Обновить базовый URL.
      * @param {string} url — новый URL
      */

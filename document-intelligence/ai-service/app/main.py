@@ -23,7 +23,9 @@ from app.api.schemas import (
     OcrResult,
     DocumentTypeResult,
     ExtractedField,
-    QualityMetricsDto
+    QualityMetricsDto,
+    AskQuestionRequest,
+    AskQuestionResponse
 )
 from app.preprocessing.pipeline import DocumentPreprocessor
 from app.ocr.factory import get_ocr_engine
@@ -32,6 +34,7 @@ from app.extractor.factory import get_field_extractor
 from app.table import TableExtractor
 from app.postprocessing.spell_corrector import spell_corrector
 from app.validation.engine import validation_engine
+from app.qa.engine import document_qa_engine
 
 # Настройка логирования
 logging.basicConfig(
@@ -133,16 +136,19 @@ async def analyze_document(file: UploadFile = File(...)):
 
     for page in prep_result.pages:
         try:
-            page_blocks = ocr_engine.recognize(page.processed_image, page_num=page.page_number)
-            for block in page_blocks:
-                all_ocr_results.append(
-                    OcrResult(
-                        text=block.text,
-                        confidence=block.confidence,
-                        bbox=block.bbox,
-                        page=block.page
+            if hasattr(page, 'ocr_blocks') and page.ocr_blocks:
+                all_ocr_results.extend(page.ocr_blocks)
+            else:
+                page_blocks = ocr_engine.recognize(page.processed_image, page_num=page.page_number)
+                for block in page_blocks:
+                    all_ocr_results.append(
+                        OcrResult(
+                            text=block.text,
+                            confidence=block.confidence,
+                            bbox=block.bbox,
+                            page=block.page
+                        )
                     )
-                )
         except Exception as e:
             logger.error(f"Ошибка OCR страницы {page.page_number}: {str(e)}", exc_info=True)
             # Не обрываем весь документ, если упала отдельная страница
@@ -193,7 +199,7 @@ async def analyze_document(file: UploadFile = File(...)):
     # а защитные сетки и рамки фото не должны ошибочно определяться как "Таблица товаров и услуг".
     NON_TABLE_DOC_TYPES = {
         "PASSPORT_RF", "PASSPORT", "PTS", "VEHICLE_PASSPORT", "VEHICLE_DOCUMENT",
-        "DRIVER_LICENSE", "SNILS", "INN", "CERTIFICATE", "APPLICATION"
+        "STS", "DRIVER_LICENSE", "SNILS", "INN", "CERTIFICATE", "APPLICATION"
     }
     extracted_tables = []
     if class_result.predicted_type not in NON_TABLE_DOC_TYPES:
@@ -307,6 +313,15 @@ async def render_page_image(
         except Exception as e:
             logger.error(f"Ошибка рендеринга страницы PDF: {e}")
             raise HTTPException(status_code=500, detail=f"Ошибка рендеринга страницы PDF: {str(e)}")
+    
+    from app.preprocessing.office_converter import OfficeDocumentConverter
+    if OfficeDocumentConverter.is_office_document(filename):
+        try:
+            png_bytes = OfficeDocumentConverter.render_page_png(content, filename, page=page)
+            return Response(content=png_bytes, media_type="image/png")
+        except Exception as e:
+            logger.error(f"Ошибка рендеринга офисного документа: {e}")
+            raise HTTPException(status_code=500, detail=f"Ошибка рендеринга документа: {str(e)}")
     else:
         return Response(content=content, media_type=file.content_type or "image/png")
 
@@ -365,6 +380,30 @@ async def get_latest_experiments():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка чтения результатов: {str(e)}")
 
+
+@app.post("/qa/ask", response_model=AskQuestionResponse)
+async def ask_document_question(request: AskQuestionRequest):
+    """
+    Вопросно-ответная система по документу (Document Q&A with Visual Grounding).
+    Принимает естественный вопрос пользователя, OCR-блоки и извлеченные поля.
+    Возвращает точный ответ, цитату и координаты Bounding Box для визуальной подсветки.
+    """
+    try:
+        return document_qa_engine.ask(
+            question=request.question,
+            ocr_results=request.ocr_results,
+            fields=request.fields,
+            document_type=request.document_type
+        )
+    except Exception as e:
+        logger.error(f"Ошибка при ответе на вопрос к документу: {e}", exc_info=True)
+        return AskQuestionResponse(
+            status="error",
+            question=request.question,
+            answer="Произошла ошибка при анализе вопроса.",
+            confidence=0.0,
+            message=str(e)
+        )
 
 
 if __name__ == "__main__":

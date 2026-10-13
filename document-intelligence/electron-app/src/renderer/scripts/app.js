@@ -1150,7 +1150,7 @@ const App = {
             });
         }
 
-        // Переключение 3 вкладок в инспекторе (Поля, OCR, Валидация)
+        // Переключение 4 вкладок в инспекторе (Поля, OCR, Валидация, Спросить у ИИ)
         const tabBtns = document.querySelectorAll('.inspector-tabs .tab-btn');
         tabBtns.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1160,10 +1160,18 @@ const App = {
                 const fieldsContent = document.getElementById('tab-fields-content');
                 const ocrContent = document.getElementById('tab-ocr-content');
                 const valContent = document.getElementById('tab-validation-content');
+                const qaContent = document.getElementById('tab-qa-content');
                 
                 if (fieldsContent) fieldsContent.style.display = tab === 'fields' ? 'flex' : 'none';
                 if (ocrContent) ocrContent.style.display = tab === 'ocr' ? 'flex' : 'none';
                 if (valContent) valContent.style.display = tab === 'validation' ? 'flex' : 'none';
+                if (qaContent) {
+                    qaContent.style.display = tab === 'qa' ? 'flex' : 'none';
+                    if (tab === 'qa') {
+                        const input = document.getElementById('qa-input');
+                        if (input) setTimeout(() => input.focus(), 100);
+                    }
+                }
             });
         });
 
@@ -1184,6 +1192,9 @@ const App = {
                 }
             };
         }
+
+        // Подключение слушателей для вопросно-ответной системы (Document Q&A)
+        this.setupQaListeners();
 
         // Настройка элементов управления просмотрщика (масштаб, drag-and-pan, слои)
         this.setupViewerControls();
@@ -1371,16 +1382,23 @@ const App = {
         const tabFieldsBtn = document.getElementById('tab-fields-btn');
         const tabOcrBtn = document.getElementById('tab-ocr-btn');
         const tabValBtn = document.getElementById('tab-validation-btn');
+        const tabQaBtn = document.getElementById('tab-qa-btn');
         if (tabFieldsBtn) tabFieldsBtn.classList.add('active');
         if (tabOcrBtn) tabOcrBtn.classList.remove('active');
         if (tabValBtn) tabValBtn.classList.remove('active');
+        if (tabQaBtn) tabQaBtn.classList.remove('active');
 
         const fieldsContent = document.getElementById('tab-fields-content');
         const ocrContent = document.getElementById('tab-ocr-content');
         const valContent = document.getElementById('tab-validation-content');
+        const qaContent = document.getElementById('tab-qa-content');
         if (fieldsContent) fieldsContent.style.display = 'flex';
         if (ocrContent) ocrContent.style.display = 'none';
         if (valContent) valContent.style.display = 'none';
+        if (qaContent) qaContent.style.display = 'none';
+
+        // Сброс вопросно-ответной системы
+        this.resetQaTab();
 
         // Показываем окно
         modal.style.display = 'flex';
@@ -2009,6 +2027,24 @@ const App = {
                 return '✉️';
             case 'PTS':
                 return '🚗';
+            case 'STS':
+                return '🚙';
+            case 'DRIVER_LICENSE':
+                return '💳';
+            case 'SNILS':
+                return '🪪';
+            case 'INN':
+                return '📄';
+            case 'CASH_RECEIPT':
+                return '🧾';
+            case 'BANK_STATEMENT':
+                return '🏦';
+            case 'TECH_PASSPORT':
+                return '⚙️';
+            case 'MEDICAL_REPORT':
+                return '🩺';
+            case 'LEGAL_HR':
+                return '⚖️';
             case 'RECEIPT':
                 return '💡';
             default:
@@ -2023,8 +2059,26 @@ const App = {
                 return 'Паспорт РФ';
             case 'PTS':
                 return 'Паспорт ТС (ПТС)';
+            case 'STS':
+                return 'Свидетельство о регистрации ТС (СТС)';
+            case 'DRIVER_LICENSE':
+                return 'Водительское удостоверение';
+            case 'SNILS':
+                return 'СНИЛС';
+            case 'INN':
+                return 'Свидетельство ИНН';
             case 'RECEIPT':
                 return 'Квитанция / Счёт ЖКУ';
+            case 'CASH_RECEIPT':
+                return 'Кассовый чек';
+            case 'BANK_STATEMENT':
+                return 'Банковская выписка';
+            case 'TECH_PASSPORT':
+                return 'Техпаспорт оборудования';
+            case 'MEDICAL_REPORT':
+                return 'Медицинские анализы / Заключение';
+            case 'LEGAL_HR':
+                return 'Судебный / Кадровый документ';
             case 'CONTRACT':
                 return 'Договор';
             case 'INVOICE':
@@ -2037,6 +2091,219 @@ const App = {
                 return 'Свидетельство / Справка';
             default:
                 return 'Не определен';
+        }
+    },
+
+    /**
+     * === Интерактивная вопросно-ответная система (Document Q&A with Visual Grounding) ===
+     */
+    setupQaListeners() {
+        const qaInput = document.getElementById('qa-input');
+        const btnAsk = document.getElementById('btn-qa-ask');
+        const chips = document.querySelectorAll('.qa-chip');
+
+        if (qaInput) {
+            qaInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.submitDocumentQuestion();
+                }
+            });
+        }
+
+        if (btnAsk) {
+            btnAsk.addEventListener('click', () => {
+                this.submitDocumentQuestion();
+            });
+        }
+
+        chips.forEach(chip => {
+            chip.addEventListener('click', () => {
+                const q = chip.dataset.question || chip.textContent;
+                if (qaInput) {
+                    qaInput.value = q;
+                }
+                this.submitDocumentQuestion();
+            });
+        });
+    },
+
+    resetQaTab() {
+        const qaInput = document.getElementById('qa-input');
+        if (qaInput) qaInput.value = '';
+        const loader = document.getElementById('qa-status-loading');
+        if (loader) loader.style.display = 'none';
+
+        const answersList = document.getElementById('qa-answers-list');
+        if (answersList) {
+            answersList.innerHTML = `
+                <div class="qa-empty-state">
+                    <div class="qa-empty-icon">💬</div>
+                    <h4>Естественный диалог с документом</h4>
+                    <p class="text-muted">Задайте любой вопрос на русском языке. AI найдёт точный ответ, процитирует источник и подсветит координаты на скане.</p>
+                </div>
+            `;
+        }
+
+        // Очищаем подсветку Q&A со скана
+        const overlay = document.getElementById('bbox-overlay-layer');
+        if (overlay) {
+            overlay.querySelectorAll('.bbox-pulse-highlight').forEach(el => el.remove());
+        }
+    },
+
+    async submitDocumentQuestion() {
+        const qaInput = document.getElementById('qa-input');
+        if (!qaInput || !this.currentAnalysisDocId) return;
+
+        const question = qaInput.value.trim();
+        if (!question) return;
+
+        const loader = document.getElementById('qa-status-loading');
+        const btnAsk = document.getElementById('btn-qa-ask');
+        const answersList = document.getElementById('qa-answers-list');
+
+        // Убираем empty-state, если он есть
+        const emptyState = answersList.querySelector('.qa-empty-state');
+        if (emptyState) emptyState.remove();
+
+        if (loader) loader.style.display = 'flex';
+        if (btnAsk) btnAsk.disabled = true;
+
+        try {
+            const resp = await ApiClient.askQuestion(this.currentAnalysisDocId, question);
+            console.log('Q&A ответ получен:', resp);
+
+            const isSuccess = resp.status === 'success';
+            const isPartial = resp.status === 'partial';
+            const cardClass = isSuccess ? 'success-answer' : (isPartial ? 'partial-answer' : 'notfound-answer');
+
+            const confPct = Math.round((resp.confidence || 0) * 100);
+            const confClass = confPct >= 75 ? 'conf-high' : (confPct >= 40 ? 'conf-mid' : 'conf-low');
+
+            const card = document.createElement('div');
+            card.className = `qa-card ${cardClass}`;
+
+            const bboxAttr = resp.bbox ? JSON.stringify(resp.bbox) : '';
+            const pageNum = resp.page || 1;
+
+            card.innerHTML = `
+                <div class="qa-q-row">
+                    <span class="qa-q-text">❓ ${this.escapeHtml(resp.question || question)}</span>
+                    <span class="conf-pill ${confClass}">${confPct}%</span>
+                </div>
+                <div class="qa-ans-box">
+                    <div class="qa-ans-label">Ответ:</div>
+                    <div class="qa-ans-value">${this.escapeHtml(resp.answer)}</div>
+                </div>
+                ${resp.snippet ? `
+                    <div class="qa-snippet-box">
+                        «${this.escapeHtml(resp.snippet)}»
+                    </div>
+                ` : ''}
+                <div class="qa-footer-row">
+                    <span class="text-muted" style="font-size: 0.78em;">
+                        ${resp.message ? this.escapeHtml(resp.message) : (isSuccess ? 'Точное совпадение' : 'Эвристический поиск')}
+                        ${pageNum > 1 ? `• Стр. ${pageNum}` : ''}
+                    </span>
+                    ${resp.bbox ? `
+                        <button class="btn-locate-bbox" data-page="${pageNum}">
+                            📍 Показать на скане
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+
+            const locateBtn = card.querySelector('.btn-locate-bbox');
+            if (locateBtn) {
+                locateBtn.addEventListener('click', () => {
+                    this.highlightQaBbox(resp.bbox, pageNum);
+                });
+            }
+
+            answersList.prepend(card);
+
+            // Если есть координаты, автоматически центрируем и подсвечиваем область
+            if (resp.bbox) {
+                this.highlightQaBbox(resp.bbox, pageNum);
+            }
+
+            qaInput.value = '';
+
+        } catch (error) {
+            console.error('Ошибка Q&A:', error);
+            const errCard = document.createElement('div');
+            errCard.className = 'qa-card notfound-answer';
+            errCard.innerHTML = `
+                <div class="qa-q-row">
+                    <span class="qa-q-text">❓ ${this.escapeHtml(question)}</span>
+                    <span class="conf-pill conf-low">0%</span>
+                </div>
+                <div style="color: var(--error); font-size: 0.85em;">
+                    ❌ Не удалось получить ответ: ${this.escapeHtml(error.message)}
+                </div>
+            `;
+            answersList.prepend(errCard);
+        } finally {
+            if (loader) loader.style.display = 'none';
+            if (btnAsk) btnAsk.disabled = false;
+        }
+    },
+
+    highlightQaBbox(bbox, targetPage) {
+        if (!bbox || !Array.isArray(bbox) || bbox.length !== 4) return;
+
+        // Если ответ на другой странице — переключаем страницу
+        if (targetPage && targetPage !== this.currentPage && targetPage <= this.totalPages) {
+            this.switchPage(targetPage);
+        }
+
+        const overlay = document.getElementById('bbox-overlay-layer');
+        const img = document.getElementById('scan-img');
+        const container = document.getElementById('viewer-container');
+        if (!overlay || !img) return;
+
+        // Удаляем предыдущие пульсирующие подсветки
+        overlay.querySelectorAll('.bbox-pulse-highlight').forEach(el => el.remove());
+
+        const docWidth = img.naturalWidth || 1000;
+        const docHeight = img.naturalHeight || 1000;
+
+        const [x1, y1, x2, y2] = bbox;
+        const leftPct = (x1 / docWidth) * 100;
+        const topPct = (y1 / docHeight) * 100;
+        const widthPct = ((x2 - x1) / docWidth) * 100;
+        const heightPct = ((y2 - y1) / docHeight) * 100;
+
+        const pulseBox = document.createElement('div');
+        pulseBox.className = 'ocr-box field-box bbox-pulse-highlight';
+        pulseBox.style.left = `${leftPct}%`;
+        pulseBox.style.top = `${topPct}%`;
+        pulseBox.style.width = `${Math.max(1.0, widthPct)}%`;
+        pulseBox.style.height = `${Math.max(1.0, heightPct)}%`;
+
+        const tag = document.createElement('span');
+        tag.className = 'field-box-tag';
+        tag.style.background = '#00e5ff';
+        tag.style.color = '#000';
+        tag.style.fontWeight = 'bold';
+        tag.textContent = '🎯 НАЙДЕННЫЙ ОТВЕТ';
+        pulseBox.appendChild(tag);
+
+        overlay.appendChild(pulseBox);
+
+        // Плавный скролл просмотрщика точно на найденную область
+        if (container) {
+            const currentImgWidth = img.clientWidth || img.naturalWidth;
+            const currentImgHeight = img.clientHeight || img.naturalHeight;
+            const targetX = (x1 / docWidth) * currentImgWidth;
+            const targetY = (y1 / docHeight) * currentImgHeight;
+
+            container.scrollTo({
+                left: Math.max(0, targetX - container.clientWidth / 2),
+                top: Math.max(0, targetY - container.clientHeight / 2),
+                behavior: 'smooth'
+            });
         }
     }
 };

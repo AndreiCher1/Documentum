@@ -73,3 +73,25 @@ class AnalyzeResponse(BaseModel):
     validation: Optional[dict] = None
     overall_confidence: float
     message: Optional[str] = None
+
+
+class AskQuestionRequest(BaseModel):
+    """Запрос естественного вопроса к документу (Document Q&A)."""
+    question: str
+    ocr_results: List[OcrResult]
+    fields: Optional[List[ExtractedField]] = []
+    document_type: Optional[str] = None
+
+
+class AskQuestionResponse(BaseModel):
+    """Ответ на вопрос с визуальным подтверждением (Visual Grounding)."""
+    status: str
+    question: str
+    answer: str
+    snippet: Optional[str] = None
+    confidence: float
+    bbox: Optional[List[int]] = None
+    page: int = 1
+    matched_field: Optional[str] = None
+    message: Optional[str] = None
+

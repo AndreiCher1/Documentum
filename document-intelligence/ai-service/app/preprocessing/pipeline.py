@@ -67,6 +67,27 @@ class DocumentPreprocessor:
         filename_lower = filename.lower()
         is_pdf = filename_lower.endswith(".pdf")
 
+        from app.preprocessing.office_converter import OfficeDocumentConverter
+        if OfficeDocumentConverter.is_office_document(filename):
+            office_pages = OfficeDocumentConverter.process_file(file_bytes, filename)
+            processed_pages: List[PreprocessedPage] = []
+            for idx, (p_img, p_blocks) in enumerate(office_pages, start=1):
+                quality = evaluate_image_quality(p_img)
+                prep_page = PreprocessedPage(
+                    page_number=idx,
+                    original_image=p_img,
+                    processed_image=p_img,
+                    quality=quality,
+                    applied_skew_angle=0.0
+                )
+                prep_page.ocr_blocks = p_blocks
+                processed_pages.append(prep_page)
+            return PreprocessingResult(
+                pages=processed_pages,
+                total_pages=len(processed_pages),
+                is_pdf=False
+            )
+
         # 1. Загрузка в список страниц np.ndarray
         if is_pdf:
             raw_pages = pdf_to_images(file_bytes, dpi=self.dpi)

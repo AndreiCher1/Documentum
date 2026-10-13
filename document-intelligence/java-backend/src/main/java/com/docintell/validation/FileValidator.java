@@ -26,7 +26,8 @@ public class FileValidator {
     private static final long MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 МБ
 
     private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList(
-            "pdf", "png", "jpg", "jpeg", "tiff", "tif", "bmp"
+            "pdf", "png", "jpg", "jpeg", "tiff", "tif", "bmp",
+            "docx", "doc", "xlsx", "xls", "csv", "txt"
     );
 
     private static final List<String> ALLOWED_MIME_TYPES = Arrays.asList(
@@ -34,7 +35,13 @@ public class FileValidator {
             "image/png",
             "image/jpeg",
             "image/tiff",
-            "image/bmp"
+            "image/bmp",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+            "text/csv",
+            "text/plain"
     );
 
     /**

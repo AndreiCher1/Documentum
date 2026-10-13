@@ -172,5 +172,18 @@ public class DocumentController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    /**
+     * POST /api/documents/{id}/ask — Естественный вопрос к документу (Document Q&A with Visual Grounding).
+     */
+    @PostMapping("/{id}/ask")
+    public ResponseEntity<com.docintell.dto.ai.AskQuestionResponseDto> askQuestion(
+            @PathVariable Long id,
+            @jakarta.validation.Valid @RequestBody com.docintell.dto.DocumentAskRequest request
+    ) {
+        logger.info("Запрос к документу ID {}: '{}'", id, request.question());
+        com.docintell.dto.ai.AskQuestionResponseDto response = documentService.askQuestion(id, request.question());
+        return ResponseEntity.ok(response);
+    }
 }
 

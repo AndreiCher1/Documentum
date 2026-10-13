@@ -154,7 +154,16 @@ public class DocumentService {
                 .orElseThrow(() -> new DocumentNotFoundException(id));
 
         String storedFilename = document.getStoredFilename();
-        if (document.getMimeType() != null && document.getMimeType().contains("pdf")) {
+
+        boolean needsConversion = document.getMimeType() != null && (
+                document.getMimeType().contains("pdf") ||
+                document.getMimeType().contains("word") ||
+                document.getMimeType().contains("officedocument") ||
+                document.getMimeType().contains("excel") ||
+                document.getMimeType().contains("csv") ||
+                document.getMimeType().contains("plain")
+        );
+        if (needsConversion) {
             String previewFilename = storedFilename + "_p" + page + ".png";
             java.nio.file.Path previewPath = fileStorageService.getStorageDirectory().resolve(previewFilename);
             if (java.nio.file.Files.exists(previewPath)) {
@@ -169,7 +178,7 @@ public class DocumentService {
                     return fileStorageService.loadAsResource(previewFilename);
                 }
             } catch (Exception e) {
-                logger.warn("Не удалось сгенерировать PNG превью страницы {} для PDF: {}", page, e.getMessage());
+                logger.warn("Не удалось сгенерировать PNG превью страницы {} для документа: {}", page, e.getMessage());
             }
         }
         return fileStorageService.loadAsResource(storedFilename);
@@ -386,6 +395,49 @@ public class DocumentService {
                 result.getCreatedAt(),
                 result.getErrorMessage()
         );
+    }
+
+    /**
+     * Задать вопрос к документу с визуальным обоснованием (Document Q&A with Visual Grounding).
+     */
+    @Transactional(readOnly = true)
+    public com.docintell.dto.ai.AskQuestionResponseDto askQuestion(Long documentId, String question) {
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new DocumentNotFoundException(documentId));
+
+        com.docintell.entity.AnalysisResult analysis = analysisResultRepository
+                .findFirstByDocumentIdOrderByCreatedAtDesc(documentId)
+                .orElseThrow(() -> new IllegalStateException("Документ еще не был проанализирован. Сначала выполните анализ документа."));
+
+        List<com.docintell.dto.ai.AiAnalyzeResponse.OcrResultDto> ocrBlocks = java.util.Collections.emptyList();
+        List<com.docintell.dto.ai.AiAnalyzeResponse.ExtractedFieldDto> fields = java.util.Collections.emptyList();
+        String docType = analysis.getDetectedType();
+
+        if (analysis.getRawResult() != null) {
+            try {
+                com.docintell.dto.ai.AiAnalyzeResponse aiResponse = objectMapper.readValue(
+                        analysis.getRawResult(),
+                        com.docintell.dto.ai.AiAnalyzeResponse.class
+                );
+                if (aiResponse.ocrResults() != null) {
+                    ocrBlocks = aiResponse.ocrResults();
+                }
+                if (aiResponse.fields() != null) {
+                    fields = aiResponse.fields();
+                }
+            } catch (Exception e) {
+                logger.warn("Не удалось прочитать rawResult анализа документа ID {}: {}", documentId, e.getMessage());
+            }
+        }
+
+        com.docintell.dto.ai.AskQuestionRequestDto requestDto = new com.docintell.dto.ai.AskQuestionRequestDto(
+                question,
+                ocrBlocks,
+                fields,
+                docType
+        );
+
+        return aiServiceClient.askQuestion(requestDto);
     }
 }
 
