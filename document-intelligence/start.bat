@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 title Document Intelligence - Запуск системы
 color 0B
@@ -40,7 +40,7 @@ for /L %%i in (1,1,30) do (
         goto :services_ready
     )
     <nul set /p =.
-    timeout /t 1 /nobreak >nul
+    ping -n 2 127.0.0.1 >nul
 )
 
 :services_ready
@@ -55,9 +55,10 @@ if "%HEALTHY%"=="1" (
 echo [3/3] Открытие интерфейса Electron...
 cd /d "%ELECTRON_DIR%"
 set ELECTRON_RUN_AS_NODE=
-npm start
+call npm start
 
 echo.
-echo Приложение закрыто. Для полной остановки фоновых сервисов запустите stop.bat.
-pause
+echo Приложение закрыто. Остановка фоновых сервисов...
+call "%ROOT_DIR%stop.bat"
+exit /b 0
 

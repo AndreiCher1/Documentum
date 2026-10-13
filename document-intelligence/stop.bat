@@ -1,4 +1,4 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 title Document Intelligence - Остановка системы
 color 0C
@@ -41,5 +41,5 @@ if ($electronProcs) {
 
 echo.
 echo Все сервисы Document Intelligence остановлены.
-timeout /t 3 >nul
+ping -n 4 127.0.0.1 >nul
 

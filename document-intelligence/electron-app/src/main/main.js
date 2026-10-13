@@ -31,14 +31,26 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 
+let mainWindow = null;
+
+// Гарантируем, что в системе всегда открыто СТРОГО ОДНО ОКНО
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+        }
+    });
+}
+
 /**
  * Создание главного окна приложения.
- *
- * BrowserWindow — это одно окно приложения (как вкладка в браузере,
- * но в отдельном окне операционной системы).
  */
 function createWindow() {
-    const mainWindow = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
         minWidth: 800,
