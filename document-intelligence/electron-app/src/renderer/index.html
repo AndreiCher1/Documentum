@@ -2,628 +2,942 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <!--
-        Content-Security-Policy (CSP) — ещё один уровень безопасности.
-
-        Эта мета-директива говорит браузеру (Electron):
-        - default-src 'self' — загружай ресурсы только из текущего приложения
-        - script-src 'self' — выполняй скрипты только из текущего приложения
-        - connect-src 'self' http://localhost:* — разрешай сетевые запросы
-          только к localhost (наш Java backend)
-        - style-src 'self' 'unsafe-inline' — разрешай стили из приложения
-          и inline-стили (для удобства разработки)
-
-        Это предотвращает:
-        - Загрузку скриптов с внешних сайтов
-        - XSS-атаки
-        - Утечку данных на внешние серверы
-    -->
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://localhost:*; font-src 'self' data:;">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document Intelligence</title>
+    <title>DocIntel — Корпоративная система анализа документов</title>
     <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
+    <!-- SVG Vector Sprite Sheet (Lucide Icon Set) -->
+    <svg style="display: none;" xmlns="http://www.w3.org/2000/svg">
+        <symbol id="icon-layout" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>
+        </symbol>
+        <symbol id="icon-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>
+        </symbol>
+        <symbol id="icon-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/>
+        </symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+        </symbol>
+        <symbol id="icon-sliders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>
+        </symbol>
+        <symbol id="icon-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </symbol>
+        <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+        </symbol>
+        <symbol id="icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+        </symbol>
+        <symbol id="icon-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>
+        </symbol>
+        <symbol id="icon-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>
+        </symbol>
+        <symbol id="icon-crosshair" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="22" x2="18" y1="12" y2="12"/><line x1="6" x2="2" y1="12" y2="12"/><line x1="12" x2="12" y1="6" y2="2"/><line x1="12" x2="12" y1="22" y2="18"/>
+        </symbol>
+        <symbol id="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+        </symbol>
+        <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5"/>
+        </symbol>
+        <symbol id="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>
+        </symbol>
+        <symbol id="icon-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+        </symbol>
+        <symbol id="icon-message-square" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </symbol>
+        <symbol id="icon-zoom-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/>
+        </symbol>
+        <symbol id="icon-zoom-out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="8" x2="14" y1="11" y2="11"/>
+        </symbol>
+        <symbol id="icon-maximize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/>
+        </symbol>
+        <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/>
+        </symbol>
+        <symbol id="icon-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>
+        </symbol>
+        <symbol id="icon-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+        </symbol>
+    </svg>
+
     <div class="app">
-        <!-- Боковая панель навигации -->
+        <!-- 1. Left Sidebar (240px) -->
         <nav class="sidebar">
-            <div class="sidebar-header">
-                <h1 class="logo">📄 DocIntel</h1>
-                <span class="version">v0.1.0</span>
+            <div>
+                <div class="sidebar-header">
+                    <div class="brand-wrapper">
+                        <div class="brand-icon">
+                            <svg><use href="#icon-file-text"></use></svg>
+                        </div>
+                        <span class="logo-text">DocIntel</span>
+                    </div>
+                    <span class="version-badge">v0.1.0-prod</span>
+                </div>
+
+                <div class="nav-section-label">Основное меню</div>
+                <ul class="nav-menu">
+                    <li class="nav-item active" data-page="dashboard">
+                        <div class="nav-item-left">
+                            <span class="nav-icon"><svg><use href="#icon-layout"></use></svg></span>
+                            <span class="nav-text">Обзор</span>
+                        </div>
+                    </li>
+                    <li class="nav-item" data-page="documents">
+                        <div class="nav-item-left">
+                            <span class="nav-icon"><svg><use href="#icon-file-text"></use></svg></span>
+                            <span class="nav-text">Реестр документов</span>
+                        </div>
+                        <span id="nav-docs-count" class="nav-pill">0</span>
+                    </li>
+                    <li class="nav-item" data-page="upload">
+                        <div class="nav-item-left">
+                            <span class="nav-icon"><svg><use href="#icon-upload"></use></svg></span>
+                            <span class="nav-text">Загрузка и конвейер</span>
+                        </div>
+                    </li>
+                    <li class="nav-item" data-page="search">
+                        <div class="nav-item-left">
+                            <span class="nav-icon"><svg><use href="#icon-search"></use></svg></span>
+                            <span class="nav-text">Интеллектуальный поиск</span>
+                        </div>
+                    </li>
+                    <li class="nav-item" data-page="experiments">
+                        <div class="nav-item-left">
+                            <span class="nav-icon"><svg><use href="#icon-sliders"></use></svg></span>
+                            <span class="nav-text">Эксперименты и метрики</span>
+                        </div>
+                    </li>
+                    <li class="nav-item" data-page="settings">
+                        <div class="nav-item-left">
+                            <span class="nav-icon"><svg><use href="#icon-settings"></use></svg></span>
+                            <span class="nav-text">Настройки системы</span>
+                        </div>
+                    </li>
+                </ul>
             </div>
-            <ul class="nav-menu">
-                <li class="nav-item active" data-page="dashboard">
-                    <span class="nav-icon">📊</span>
-                    <span class="nav-text">Dashboard</span>
-                </li>
-                <li class="nav-item" data-page="upload">
-                    <span class="nav-icon">📤</span>
-                    <span class="nav-text">Загрузка</span>
-                </li>
-                <li class="nav-item" data-page="documents">
-                    <span class="nav-icon">📁</span>
-                    <span class="nav-text">Документы</span>
-                </li>
-                <li class="nav-item" data-page="search">
-                    <span class="nav-icon">🔍</span>
-                    <span class="nav-text">Поиск</span>
-                </li>
-                <li class="nav-item" data-page="experiments">
-                    <span class="nav-icon">🔬</span>
-                    <span class="nav-text">Эксперименты</span>
-                </li>
-                <li class="nav-item" data-page="settings">
-                    <span class="nav-icon">⚙️</span>
-                    <span class="nav-text">Настройки</span>
-                </li>
-            </ul>
+
+            <!-- Sidebar Bottom: Service Health LEDs & Operator Profile -->
+            <div class="sidebar-footer">
+                <div class="service-health-panel" id="service-health-panel" title="Наведите для просмотра состояния компонентов системы">
+                    <div class="health-summary-row">
+                        <div class="health-summary-left">
+                            <span>Сервисы</span>
+                            <div class="led-group">
+                                <span class="status-led checking" id="led-java" title="Java API"></span>
+                                <span class="status-led checking" id="led-ai" title="Python AI Service"></span>
+                                <span class="status-led checking" id="led-db" title="PostgreSQL / H2"></span>
+                            </div>
+                        </div>
+                        <span style="font-size: 10.5px; color: var(--text-muted); font-weight: 600;">Status</span>
+                    </div>
+
+                    <!-- Detailed Popover on Hover -->
+                    <div class="health-popover" id="health-popover">
+                        <div class="popover-title">
+                            <span>Состояние микросервисов</span>
+                            <span id="popover-timestamp" style="font-size: 9.5px; font-weight: normal;">только что</span>
+                        </div>
+                        <div class="popover-item">
+                            <span class="popover-service-name">
+                                <span class="status-led checking" id="pop-led-java"></span> Java Backend API
+                            </span>
+                            <span class="popover-val" id="pop-val-java">:8085</span>
+                        </div>
+                        <div class="popover-item">
+                            <span class="popover-service-name">
+                                <span class="status-led checking" id="pop-led-ai"></span> Python AI Engine
+                            </span>
+                            <span class="popover-val" id="pop-val-ai">:8000</span>
+                        </div>
+                        <div class="popover-item">
+                            <span class="popover-service-name">
+                                <span class="status-led checking" id="pop-led-db"></span> Storage & DB
+                            </span>
+                            <span class="popover-val" id="pop-val-db">H2 Connected</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="operator-card">
+                    <div class="avatar-circle">ОА</div>
+                    <div class="operator-meta">
+                        <span class="operator-name">Оператор архива</span>
+                        <span class="operator-role">Администратор системы</span>
+                    </div>
+                </div>
+            </div>
         </nav>
 
-        <!-- Основная область контента -->
-        <main class="content">
-            <!-- Dashboard -->
-            <div id="page-dashboard" class="page active">
-                <h2>Dashboard</h2>
-                <p class="subtitle">Состояние системы и статистика</p>
+        <!-- 2. Main Wrapper with Sticky Topbar -->
+        <div class="main-wrapper">
+            <!-- Sticky Topbar (48px) -->
+            <header class="topbar">
+                <div class="topbar-left">
+                    <div class="breadcrumbs" id="topbar-breadcrumbs">
+                        <span class="breadcrumbs-segment">Рабочее место</span>
+                        <span class="breadcrumbs-separator">/</span>
+                        <span class="breadcrumbs-current" id="breadcrumb-active-page">Обзор</span>
+                    </div>
 
-                <div class="status-cards">
-                    <div class="status-card" id="status-java">
-                        <div class="status-icon">☕</div>
-                        <div class="status-info">
-                            <h3>Java Backend</h3>
-                            <span class="status-badge checking">Проверка...</span>
-                        </div>
-                    </div>
-                    <div class="status-card" id="status-ai">
-                        <div class="status-icon">🤖</div>
-                        <div class="status-info">
-                            <h3>AI Service</h3>
-                            <span class="status-badge checking">Проверка...</span>
-                        </div>
-                    </div>
-                    <div class="status-card" id="status-db">
-                        <div class="status-icon">🗄️</div>
-                        <div class="status-info">
-                            <h3>База данных</h3>
-                            <span class="status-badge checking">Проверка...</span>
-                        </div>
+                    <div class="global-search-wrapper">
+                        <span class="global-search-icon">
+                            <svg><use href="#icon-search"></use></svg>
+                        </span>
+                        <input type="text" id="global-search-input" class="global-search-input" placeholder="Поиск по документам..." />
+                        <span class="kbd-shortcut">Ctrl K</span>
                     </div>
                 </div>
 
-                <!-- Аналитические KPI карточки -->
-                <div class="kpi-cards-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-icon">📑</div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Всего документов</span>
-                            <span class="kpi-value" id="dashboard-total-count">0</span>
+                <div class="topbar-right">
+                    <button class="icon-btn" id="btn-topbar-notifications" title="Уведомления">
+                        <svg><use href="#icon-bell"></use></svg>
+                        <span class="notification-badge"></span>
+                    </button>
+                    <button class="btn btn-primary" id="btn-topbar-upload">
+                        <svg><use href="#icon-plus"></use></svg>
+                        <span>Загрузить</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- 3. Scrollable Workspaces -->
+            <main class="content">
+                <!-- Screen 1: Dashboard (Обзор) -->
+                <div id="page-dashboard" class="page active">
+                    <div class="page-header-row">
+                        <div>
+                            <h2 class="page-title">Сводный обзор архива</h2>
+                            <p class="page-subtitle">Оперативные аналитические метрики и очередь документов на подтверждение</p>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" id="btn-check-health" title="Проверить статус подключения">
+                                <svg><use href="#icon-refresh"></use></svg>
+                                <span>Проверить связь</span>
+                            </button>
+                            <button class="btn btn-secondary" id="btn-dashboard-export-csv" title="Экспорт реестра в CSV">
+                                <svg><use href="#icon-download"></use></svg>
+                                <span>Экспорт CSV</span>
+                            </button>
+                            <button class="btn btn-secondary" id="btn-dashboard-export-json" title="Экспорт реестра в JSON">
+                                <span>JSON</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 4 KPI Cards -->
+                    <div class="kpi-cards-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-top-row">
+                                <span class="kpi-label">Всего документов</span>
+                                <div class="kpi-icon-pill primary"><svg><use href="#icon-file-text"></use></svg></div>
+                            </div>
+                            <div class="kpi-value-row">
+                                <span class="kpi-value" id="dashboard-total-count">0</span>
+                                <span class="kpi-delta up">+100%</span>
+                            </div>
+                            <span class="kpi-sub" id="dashboard-total-size">0 МБ в хранилище</span>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-top-row">
+                                <span class="kpi-label">Успешно структурировано</span>
+                                <div class="kpi-icon-pill success"><svg><use href="#icon-check"></use></svg></div>
+                            </div>
+                            <div class="kpi-value-row">
+                                <span class="kpi-value" id="dashboard-success-rate">0%</span>
+                            </div>
+                            <span class="kpi-sub" id="dashboard-success-sub">0 из 0 документов обработано</span>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-top-row">
+                                <span class="kpi-label">Требуют верификации</span>
+                                <div class="kpi-icon-pill warning"><svg><use href="#icon-eye"></use></svg></div>
+                            </div>
+                            <div class="kpi-value-row">
+                                <span class="kpi-value" id="dashboard-review-count">0</span>
+                            </div>
                             <span class="kpi-sub" id="dashboard-status-pills">0 готово • 0 в работе</span>
                         </div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-icon">💾</div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Общий объём архива</span>
-                            <span class="kpi-value" id="dashboard-total-size">0 МБ</span>
-                            <span class="kpi-sub">Файлы на сервере</span>
-                        </div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-icon">🎯</div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Средняя уверенность AI</span>
-                            <span class="kpi-value" id="dashboard-avg-confidence">0%</span>
-                            <span class="kpi-sub">OCR и классификация</span>
-                        </div>
-                    </div>
-                    <div class="kpi-card">
-                        <div class="kpi-icon">✅</div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Успешность обработки</span>
-                            <span class="kpi-value" id="dashboard-success-rate">0%</span>
-                            <span class="kpi-sub" id="dashboard-success-sub">0 из 0 без сбоев</span>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="dashboard-actions">
-                    <button class="btn btn-primary" id="btn-check-health">
-                        🔄 Проверить связь
-                    </button>
-                    <button class="btn btn-secondary" id="btn-quick-upload">
-                        📤 Загрузить документы
-                    </button>
-                    <button class="btn btn-secondary" id="btn-dashboard-export-csv" title="Экспорт всего реестра документов в CSV с поддержкой русского языка">
-                        📊 Экспорт реестра (CSV)
-                    </button>
-                    <button class="btn btn-secondary" id="btn-dashboard-export-json" title="Экспорт всех документов в формате JSON">
-                        📦 Экспорт базы (JSON)
-                    </button>
-                </div>
-
-                <div id="health-result" class="result-box" style="display: none;"></div>
-
-                <!-- Распределение по категориям документов -->
-                <div class="dashboard-section">
-                    <div class="section-header-row">
-                        <h3>Распределение по категориям документов</h3>
-                        <span class="text-muted" id="dashboard-categories-meta">0 типов определено</span>
-                    </div>
-                    <div id="dashboard-categories-container" class="categories-distribution-grid">
-                        <p class="text-muted">Статистика по категориям загружается...</p>
-                    </div>
-                </div>
-
-                <div class="dashboard-section">
-                    <h3>Последние загруженные документы</h3>
-                    <div id="dashboard-recent-list" class="recent-documents-container">
-                        <p class="text-muted">Загруженных документов пока нет.</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Upload -->
-            <div id="page-upload" class="page">
-                <h2>Загрузка документов</h2>
-                <p class="subtitle">Загрузите один или несколько документов (PDF или сканы) для интеллектуального анализа</p>
-
-                <div id="drop-zone" class="drop-zone">
-                    <div class="drop-zone-content">
-                        <span class="drop-icon">📁</span>
-                        <h3>Перетащите файлы сюда (поддерживается пакетная загрузка)</h3>
-                        <p class="drop-text">или нажмите кнопку ниже для выбора файлов</p>
-                        <input type="file" id="file-input" multiple accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.tiff,.tif,.bmp" style="display: none;" />
-                        <button class="btn btn-primary" id="btn-browse-file">
-                            📂 Выбрать файлы с диска
-                        </button>
-                        <p class="format-hint">Поддерживаются: PDF, DOCX, XLSX, CSV, TXT, PNG, JPG, TIFF, BMP (макс. 50 МБ на файл)</p>
-                    </div>
-                </div>
-
-                <!-- Блок очереди пакетной загрузки файлов -->
-                <div id="batch-upload-container" class="batch-upload-card" style="display: none;">
-                    <div class="batch-upload-header">
-                        <div class="batch-summary-info">
-                            <h4>Очередь файлов (<span id="batch-file-count">0</span>)</h4>
-                            <span id="batch-total-size" class="text-muted">Общий объём: 0 МБ</span>
-                        </div>
-                        <div class="batch-actions-buttons">
-                            <button class="btn btn-primary" id="btn-batch-upload-all">
-                                🚀 Загрузить все файлы (<span id="batch-upload-btn-count">0</span>)
-                            </button>
-                            <button class="btn btn-danger" id="btn-batch-clear-all">
-                                🗑️ Очистить очередь
-                            </button>
+                        <div class="kpi-card">
+                            <div class="kpi-top-row">
+                                <span class="kpi-label">Средняя уверенность AI</span>
+                                <div class="kpi-icon-pill success"><svg><use href="#icon-zap"></use></svg></div>
+                            </div>
+                            <div class="kpi-value-row">
+                                <span class="kpi-value" id="dashboard-avg-confidence">0%</span>
+                            </div>
+                            <span class="kpi-sub">OCR и классификация полей</span>
                         </div>
                     </div>
 
-                    <!-- Общий прогресс-бар загрузки -->
-                    <div id="batch-overall-progress" class="batch-progress-wrapper" style="display: none;">
-                        <div class="batch-progress-header">
-                            <span id="batch-progress-text">Загрузка файлов...</span>
-                            <span id="batch-progress-percent">0%</span>
-                        </div>
-                        <div class="batch-progress-track">
-                            <div id="batch-progress-fill" class="batch-progress-fill" style="width: 0%;"></div>
-                        </div>
-                    </div>
-
-                    <div id="batch-files-list" class="batch-files-list"></div>
-                </div>
-
-                <div id="upload-status" class="alert-box" style="display: none;"></div>
-            </div>
-
-            <!-- Documents -->
-            <div id="page-documents" class="page">
-                <div class="page-header-row">
-                    <div>
-                        <h2>Документы</h2>
-                        <p class="subtitle">Реестр загруженных документов</p>
-                    </div>
-                    <div class="page-header-actions" style="display: flex; gap: 8px; align-items: center;">
-                        <button class="btn btn-secondary" id="btn-refresh-docs">
-                            🔄 Обновить
-                        </button>
-                        <button class="btn btn-secondary" id="btn-export-registry-csv" title="Экспорт реестра в Excel CSV (UTF-8 с BOM)">
-                            📊 Экспорт CSV
-                        </button>
-                        <button class="btn btn-secondary" id="btn-export-registry-json" title="Экспорт реестра документов в JSON">
-                            📦 Экспорт JSON
-                        </button>
-                    </div>
-                </div>
-
-                <div class="table-container">
-                    <table class="data-table" id="documents-table">
-                        <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>Имя файла</th>
-                                <th>Тип документа</th>
-                                <th>Размер</th>
-                                <th>Статус</th>
-                                <th>Уверенность</th>
-                                <th>Дата загрузки</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="documents-table-body">
-                            <tr>
-                                <td colspan="8" class="text-center text-muted">Загрузка документов...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Search -->
-            <div id="page-search" class="page">
-                <div class="page-header-row">
-                    <div>
-                        <h2>Поиск и фильтрация</h2>
-                        <p class="subtitle">Полнотекстовый поиск по распознанному тексту, атрибутам и параметрам</p>
-                    </div>
-                </div>
-
-                <div class="search-panel">
-                    <div class="search-bar-row">
-                        <div class="search-input-wrapper">
-                            <span class="search-icon">🔍</span>
-                            <input type="text" id="search-input" placeholder="Поиск по имени файла, реквизитам (ИНН, VIN, сумма, даты), распознанному тексту..." />
-                            <button id="search-clear-btn" class="search-clear-btn" title="Очистить" style="display: none;">&times;</button>
-                        </div>
-                        <button class="btn btn-primary" id="btn-search-exec">
-                            🔍 Найти
-                        </button>
-                        <button class="btn btn-secondary" id="btn-search-reset" title="Сбросить все фильтры">
-                            🔄 Сброс
-                        </button>
-                    </div>
-
-                    <div class="search-filters-grid">
-                        <div class="filter-group">
-                            <label for="search-filter-type">Тип документа</label>
-                            <select id="search-filter-type" class="filter-select">
-                                <option value="ALL">Все типы документов</option>
-                                <option value="PASSPORT">Паспорт РФ</option>
-                                <option value="PTS">Паспорт ТС (ПТС)</option>
-                                <option value="RECEIPT">Квитанция / Счёт ЖКУ</option>
-                                <option value="INVOICE">Счёт на оплату</option>
-                                <option value="CONTRACT">Договор</option>
-                                <option value="ACT">Акт выполненных работ</option>
-                                <option value="WAYBILL">Накладная</option>
-                                <option value="TAX_2NDFL">Справка 2-НДФЛ</option>
-                                <option value="CERTIFICATE">Свидетельство / Справка</option>
-                                <option value="UNKNOWN">Не определён</option>
-                            </select>
-                        </div>
-
-                        <div class="filter-group">
-                            <label for="search-filter-status">Статус обработки</label>
-                            <select id="search-filter-status" class="filter-select">
-                                <option value="ALL">Любой статус</option>
-                                <option value="COMPLETED">Обработан (COMPLETED)</option>
-                                <option value="UPLOADED">Загружен (UPLOADED)</option>
-                                <option value="PROCESSING">В обработке (PROCESSING)</option>
-                                <option value="FAILED">Ошибка (FAILED)</option>
-                            </select>
-                        </div>
-
-                        <div class="filter-group">
-                            <label>Период создания</label>
-                            <div class="filter-date-range">
-                                <input type="date" id="search-filter-date-from" class="filter-input-date" title="Дата от" />
-                                <span class="filter-date-separator">—</span>
-                                <input type="date" id="search-filter-date-to" class="filter-input-date" title="Дата до" />
+                    <!-- 2-Column Split: Review Queue (65%) + Categories & Performance (35%) -->
+                    <div class="dashboard-split-grid">
+                        <div class="dashboard-panel">
+                            <div class="panel-header-row">
+                                <span class="panel-title">
+                                    <svg><use href="#icon-layers"></use></svg>
+                                    Последние обработанные документы
+                                </span>
+                                <button class="btn btn-ghost btn-sm" id="btn-quick-upload">
+                                    <span>Перейти в реестр →</span>
+                                </button>
+                            </div>
+                            <div id="dashboard-recent-list" class="recent-documents-container">
+                                <p class="text-muted" style="padding: 16px 0;">Загрузка документов архива...</p>
                             </div>
                         </div>
 
-                        <div class="filter-group">
-                            <div class="filter-label-with-value">
-                                <label for="search-filter-conf">Мин. уверенность (AI)</label>
-                                <span id="search-filter-conf-label" class="filter-val-badge">0%</span>
+                        <div class="dashboard-panel">
+                            <div class="panel-header-row">
+                                <span class="panel-title">
+                                    <svg><use href="#icon-sliders"></use></svg>
+                                    Категории документов
+                                </span>
+                                <span style="font-size: 11px; color: var(--text-muted);" id="dashboard-categories-meta">0 типов</span>
                             </div>
-                            <input type="range" id="search-filter-conf" class="filter-range" min="0" max="100" value="0" step="5" />
+                            <div id="dashboard-categories-container" class="category-bars-list">
+                                <p class="text-muted">Статистика по категориям рассчитывается...</p>
+                            </div>
+
+                            <!-- Throughput & Inference Metrics -->
+                            <div class="perf-stat-grid">
+                                <div class="perf-box">
+                                    <div class="perf-box-label">Инференс OCR</div>
+                                    <div class="perf-box-value">~380 ms / стр</div>
+                                </div>
+                                <div class="perf-box">
+                                    <div class="perf-box-label">Движок анализа</div>
+                                    <div class="perf-box-value" style="color: #16A34A;">Paddle + RegEx</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Legacy hidden compatibility container -->
+                    <div id="health-result" style="display: none;"></div>
+                    <div id="status-java" style="display: none;"><span class="status-badge"></span></div>
+                    <div id="status-ai" style="display: none;"><span class="status-badge"></span></div>
+                    <div id="status-db" style="display: none;"><span class="status-badge"></span></div>
                 </div>
 
-                <div class="search-results-meta">
-                    <span id="search-results-count" class="search-counter-badge">Введите запрос или нажмите «Найти»</span>
-                </div>
-
-                <div id="search-results-list" class="search-results-container">
-                    <div class="placeholder-box">
-                        <span class="placeholder-icon">🔍</span>
-                        <p>Введите поисковый запрос или настройте фильтры и нажмите кнопку «Найти»</p>
-                        <p class="text-muted">Поддерживается мгновенный полнотекстовый поиск по содержимому документов</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Experiments (Этап 12) -->
-            <div id="page-experiments" class="page">
-                <div class="page-header-row">
-                    <div>
-                        <h2>Эксперименты и Оценка моделей</h2>
-                        <p class="subtitle">Стресс-тестирование OCR-пайплайна, генерация искажений реального мира и расчёт метрик качества</p>
-                    </div>
-                    <div class="page-header-actions" style="display: flex; gap: 10px; align-items: center;">
-                        <select id="experiments-mode-select" class="filter-select" style="min-width: 170px;">
-                            <option value="true">⚡ Быстрый тест (Quick)</option>
-                            <option value="false">🔬 Полный стресс-тест</option>
-                        </select>
-                        <button class="btn btn-primary" id="btn-run-experiments">
-                            🚀 Запустить бенчмарк
-                        </button>
-                    </div>
-                </div>
-
-                <div id="experiments-progress-box" class="alert-box" style="display: none; background: rgba(79, 195, 247, 0.1); border-color: var(--accent);">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <span style="font-size: 1.4em;">⚙️</span>
+                <!-- Screen 2: Registry DataGrid (Реестр документов) -->
+                <div id="page-documents" class="page">
+                    <div class="page-header-row">
                         <div>
-                            <strong>Выполняется стресс-тестирование моделей...</strong>
-                            <div class="text-muted" style="font-size: 0.85em;">Генерация синтетических искажений (размытие, перекос, шум) и замер CER/WER на CPU. Это может занять от 10 до 30 секунд.</div>
+                            <h2 class="page-title">Реестр документов архива</h2>
+                            <p class="page-subtitle">Централизованный список с результатами извлечения полей и уверенностью AI</p>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" id="btn-refresh-docs" title="Обновить список">
+                                <svg><use href="#icon-refresh"></use></svg>
+                                <span>Обновить</span>
+                            </button>
+                            <button class="btn btn-secondary" id="btn-export-registry-csv" title="Экспорт реестра в CSV (Excel)">
+                                <svg><use href="#icon-download"></use></svg>
+                                <span>Экспорт CSV</span>
+                            </button>
+                            <button class="btn btn-secondary" id="btn-export-registry-json" title="Экспорт реестра в JSON">
+                                <span>JSON</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Segment Filters & Search Bar -->
+                    <div class="registry-toolbar">
+                        <div class="segment-tabs" id="registry-segment-tabs">
+                            <button class="segment-btn active" data-segment="all">
+                                <span>Все</span>
+                                <span class="segment-count" id="segment-all-count">0</span>
+                            </button>
+                            <button class="segment-btn" data-segment="review">
+                                <span>Требуют проверки</span>
+                                <span class="segment-count" id="segment-review-count">0</span>
+                            </button>
+                            <button class="segment-btn" data-segment="processing">
+                                <span>В обработке</span>
+                                <span class="segment-count" id="segment-proc-count">0</span>
+                            </button>
+                            <button class="segment-btn" data-segment="completed">
+                                <span>Готово</span>
+                                <span class="segment-count" id="segment-comp-count">0</span>
+                            </button>
+                        </div>
+
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="table-search-input" class="table-search-input" placeholder="Фильтр по названию..." />
+                        </div>
+                    </div>
+
+                    <!-- Advanced High-Density Table -->
+                    <div class="table-card">
+                        <div class="table-container">
+                            <table class="data-table" id="documents-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 32px;"><input type="checkbox" id="select-all-docs" /></th>
+                                        <th>Документ</th>
+                                        <th>Тип документа</th>
+                                        <th>Статус</th>
+                                        <th>Уверенность AI</th>
+                                        <th>Полей</th>
+                                        <th>Дата добавления</th>
+                                        <th style="text-align: right;">Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="documents-table-body">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px 0;">
+                                            Загрузка реестра документов...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Floating Bulk Action Bar -->
+                    <div class="floating-bulk-bar" id="floating-bulk-bar">
+                        <span class="bulk-count" id="bulk-selected-count">Выбрано: 0</span>
+                        <button class="bulk-btn" id="bulk-btn-export-csv">
+                            <svg><use href="#icon-download"></use></svg>
+                            <span>Экспорт CSV</span>
+                        </button>
+                        <button class="bulk-btn" id="bulk-btn-export-json">
+                            <span>Экспорт JSON</span>
+                        </button>
+                        <button class="bulk-btn" id="bulk-btn-delete" style="color: #F87171;">
+                            <svg><use href="#icon-trash"></use></svg>
+                            <span>Удалить выбранные</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Screen 3: Ingestion Hub (Загрузка и конвейер) -->
+                <div id="page-upload" class="page">
+                    <div class="page-header-row">
+                        <div>
+                            <h2 class="page-title">Приём и конвейер обработки</h2>
+                            <p class="page-subtitle">Пакетная загрузка сканов, PDF и офисных документов с адаптивной предобработкой</p>
+                        </div>
+                    </div>
+
+                    <div class="ingestion-card">
+                        <div id="drop-zone" class="drop-zone">
+                            <div class="drop-icon-circle">
+                                <svg><use href="#icon-upload"></use></svg>
+                            </div>
+                            <div class="drop-main-text">Перетащите PDF, сканы или офисные документы сюда</div>
+                            <div class="drop-sub-text">или нажмите кнопку для выбора файлов с диска</div>
+                            <input type="file" id="file-input" multiple accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt,.png,.jpg,.jpeg,.tiff,.tif,.bmp" style="display: none;" />
+                            <button class="btn btn-secondary" id="btn-browse-file" style="margin-top: 4px;">
+                                <svg><use href="#icon-file-text"></use></svg>
+                                <span>Выбрать файлы</span>
+                            </button>
+                            <div class="format-chips-row">
+                                <span class="format-chip">PDF</span>
+                                <span class="format-chip">DOCX</span>
+                                <span class="format-chip">XLSX</span>
+                                <span class="format-chip">CSV</span>
+                                <span class="format-chip">TXT</span>
+                                <span class="format-chip">PNG / JPG</span>
+                                <span class="format-chip">TIFF</span>
+                                <span class="format-chip">до 50 МБ</span>
+                            </div>
+                        </div>
+
+                        <!-- Processing Presets Bar -->
+                        <div class="presets-panel">
+                            <span class="presets-label">Опции конвейера</span>
+                            <div class="preset-options-group">
+                                <label class="preset-checkbox-label">
+                                    <input type="checkbox" checked id="preset-classify" />
+                                    <span>Автоопределение типа документа</span>
+                                </label>
+                                <label class="preset-checkbox-label">
+                                    <input type="checkbox" checked id="preset-deskew" />
+                                    <span>Выравнивание перекоса (Auto-Deskew) & CLAHE</span>
+                                </label>
+                                <label class="preset-checkbox-label">
+                                    <input type="checkbox" checked id="preset-tables" />
+                                    <span>Глубокое извлечение таблиц и реквизитов</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Staging Queue Table -->
+                    <div id="batch-upload-container" class="batch-queue-card" style="display: none;">
+                        <div class="batch-queue-header">
+                            <div>
+                                <h4 style="font-size: 13.5px; font-weight: 600;">Очередь файлов к загрузке (<span id="batch-file-count">0</span>)</h4>
+                                <span id="batch-total-size" style="font-size: 11.5px; color: var(--text-muted);">Общий объём: 0 МБ</span>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary" id="btn-batch-upload-all">
+                                    <svg><use href="#icon-zap"></use></svg>
+                                    <span>Запустить пакетную обработку (<span id="batch-upload-btn-count">0</span>)</span>
+                                </button>
+                                <button class="btn btn-danger btn-sm" id="btn-batch-clear-all">
+                                    <svg><use href="#icon-trash"></use></svg>
+                                    <span>Очистить</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Batch Overall Progress -->
+                        <div id="batch-overall-progress" style="display: none; margin-bottom: 14px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px;">
+                                <span id="batch-progress-text">Загрузка файлов...</span>
+                                <span id="batch-progress-percent" style="font-weight: 600; font-family: var(--font-mono);">0%</span>
+                            </div>
+                            <div style="height: 6px; background: #E2E8F0; border-radius: 3px; overflow: hidden;">
+                                <div id="batch-progress-fill" style="height: 100%; width: 0%; background: var(--primary); transition: width 0.2s ease;"></div>
+                            </div>
+                        </div>
+
+                        <div id="batch-files-list"></div>
+                    </div>
+
+                    <div id="upload-status" class="alert-box" style="display: none;"></div>
+                </div>
+
+                <!-- Screen 4: Smart Search (Интеллектуальный поиск) -->
+                <div id="page-search" class="page">
+                    <div class="page-header-row">
+                        <div>
+                            <h2 class="page-title">Интеллектуальный поиск и семантический архив</h2>
+                            <p class="page-subtitle">Полнотекстовый поиск по распознанному слою, атрибутам, суммам и реквизитам</p>
+                        </div>
+                    </div>
+
+                    <div class="search-container">
+                        <div class="search-main-row">
+                            <div style="position: relative; flex: 1;">
+                                <span class="global-search-icon">
+                                    <svg><use href="#icon-search"></use></svg>
+                                </span>
+                                <input type="text" id="search-input" class="search-field-input" placeholder="Поиск по тексту, суммам, ИНН, VIN, ФИО..." />
+                                <button id="search-clear-btn" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); display: none;">&times;</button>
+                            </div>
+                            <button class="btn btn-primary" id="btn-search-exec">
+                                <svg><use href="#icon-search"></use></svg>
+                                <span>Найти</span>
+                            </button>
+                            <button class="btn btn-secondary" id="btn-search-reset" title="Сбросить все параметры">
+                                <svg><use href="#icon-refresh"></use></svg>
+                                <span>Сброс</span>
+                            </button>
+                        </div>
+
+                        <!-- Natural Language Query Chips -->
+                        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;">
+                            <span style="font-size: 11px; color: var(--text-muted);">Быстрые запросы:</span>
+                            <button class="qa-chip-btn search-preset-chip" data-query="Договор поставки 2025">Договоры 2025</button>
+                            <button class="qa-chip-btn search-preset-chip" data-query="Паспорт гражданина РФ">Паспорта РФ</button>
+                            <button class="qa-chip-btn search-preset-chip" data-query="ПТС транспортного средства">Паспорта ТС</button>
+                            <button class="qa-chip-btn search-preset-chip" data-query="ИНН 77">ИНН (Москва 77)</button>
+                            <button class="qa-chip-btn search-preset-chip" data-query="Сумма к оплате руб">Счета с суммами</button>
+                        </div>
+
+                        <!-- Filter Selectors -->
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding-top: 12px; border-top: 1px solid var(--border-subtle);">
+                            <div>
+                                <label style="display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">Тип документа</label>
+                                <select id="search-filter-type" style="width: 100%; height: 30px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: 12px; background: var(--surface);">
+                                    <option value="ALL">Все категории</option>
+                                    <option value="PASSPORT">Паспорт РФ</option>
+                                    <option value="PTS">Паспорт ТС (ПТС)</option>
+                                    <option value="RECEIPT">Квитанция / Счёт ЖКУ</option>
+                                    <option value="INVOICE">Счёт на оплату</option>
+                                    <option value="CONTRACT">Договор</option>
+                                    <option value="ACT">Акт выполненных работ</option>
+                                    <option value="WAYBILL">Накладная</option>
+                                    <option value="TAX_2NDFL">Справка 2-НДФЛ</option>
+                                    <option value="CERTIFICATE">Свидетельство</option>
+                                    <option value="UNKNOWN">Не определён</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style="display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">Статус</label>
+                                <select id="search-filter-status" style="width: 100%; height: 30px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: 12px; background: var(--surface);">
+                                    <option value="ALL">Любой статус</option>
+                                    <option value="COMPLETED">Обработан (COMPLETED)</option>
+                                    <option value="UPLOADED">Загружен (UPLOADED)</option>
+                                    <option value="PROCESSING">В обработке (PROCESSING)</option>
+                                    <option value="FAILED">Ошибка (FAILED)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style="display: block; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">Период создания</label>
+                                <div style="display: flex; gap: 4px; align-items: center;">
+                                    <input type="date" id="search-filter-date-from" style="flex: 1; height: 30px; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: 11px;" />
+                                    <span style="color: var(--text-muted); font-size: 11px;">—</span>
+                                    <input type="date" id="search-filter-date-to" style="flex: 1; height: 30px; padding: 0 6px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: 11px;" />
+                                </div>
+                            </div>
+
+                            <div>
+                                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">
+                                    <span>Мин. уверенность</span>
+                                    <span id="search-filter-conf-label" style="color: var(--primary);">0%</span>
+                                </div>
+                                <input type="range" id="search-filter-conf" min="0" max="100" value="0" step="5" style="width: 100%; accent-color: var(--primary);" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                        <span id="search-results-count" style="font-size: 12px; font-weight: 600; color: var(--text-secondary);">
+                            Введите поисковый запрос или выберите быстрый фильтр
+                        </span>
+                    </div>
+
+                    <div id="search-results-list">
+                        <div class="search-result-card" style="text-align: center; color: var(--text-muted); padding: 48px 0;">
+                            Введите запрос для поиска по атрибутам и тексту архива
                         </div>
                     </div>
                 </div>
 
-                <!-- KPI карточки экспериментов -->
-                <div class="kpi-cards-grid" id="experiments-kpi-grid">
-                    <div class="kpi-card">
-                        <div class="kpi-icon">📉</div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Средний CER (Посимвольно)</span>
-                            <span class="kpi-value" id="exp-cer-value">—</span>
-                            <span class="kpi-sub" id="exp-cer-sub">Без OpenCV: —</span>
+                <!-- Screen 5: ML Workbench & Experiments (Эксперименты и метрики) -->
+                <div id="page-experiments" class="page">
+                    <div class="page-header-row">
+                        <div>
+                            <h2 class="page-title">ML Workbench: Оценка качества и устойчивости</h2>
+                            <p class="page-subtitle">Стресс-тестирование OCR-пайплайна, синтетические искажения реального мира и расчет CER/WER</p>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <select id="experiments-mode-select" style="height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); font-size: 12px; background: var(--surface);">
+                                <option value="true">Быстрый тест (Quick Benchmark)</option>
+                                <option value="false">Полный стресс-тест моделей</option>
+                            </select>
+                            <button class="btn btn-primary" id="btn-run-experiments">
+                                <svg><use href="#icon-zap"></use></svg>
+                                <span>Запустить бенчмарк</span>
+                            </button>
                         </div>
                     </div>
-                    <div class="kpi-card">
-                        <div class="kpi-icon">📝</div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Средний WER (Пословно)</span>
-                            <span class="kpi-value" id="exp-wer-value">—</span>
-                            <span class="kpi-sub" id="exp-wer-sub">Без OpenCV: —</span>
+
+                    <div id="experiments-progress-box" style="display: none; background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: var(--radius-lg); padding: 12px 16px; margin-bottom: 16px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span class="status-led checking"></span>
+                            <div>
+                                <strong style="color: #1D4ED8;">Выполняется бенчмарк моделей на CPU...</strong>
+                                <div style="font-size: 11.5px; color: #475569;">Генерация искажений (размытие, перекос, шум) и расчет метрик посимвольного CER и словесного WER.</div>
+                            </div>
                         </div>
                     </div>
-                    <div class="kpi-card">
-                        <div class="kpi-icon">🎯</div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">F1-Score извлечения полей</span>
-                            <span class="kpi-value" id="exp-f1-value">—</span>
+
+                    <!-- Metrics KPI Cards -->
+                    <div class="kpi-cards-grid">
+                        <div class="kpi-card">
+                            <div class="kpi-top-row">
+                                <span class="kpi-label">Символьная ошибка (CER)</span>
+                                <div class="kpi-icon-pill primary"><svg><use href="#icon-sliders"></use></svg></div>
+                            </div>
+                            <div class="kpi-value-row">
+                                <span class="kpi-value" id="exp-cer-value">—</span>
+                            </div>
+                            <span class="kpi-sub" id="exp-cer-sub">Без предобработки: —</span>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-top-row">
+                                <span class="kpi-label">Словесная ошибка (WER)</span>
+                                <div class="kpi-icon-pill warning"><svg><use href="#icon-file-text"></use></svg></div>
+                            </div>
+                            <div class="kpi-value-row">
+                                <span class="kpi-value" id="exp-wer-value">—</span>
+                            </div>
+                            <span class="kpi-sub" id="exp-wer-sub">Без предобработки: —</span>
+                        </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-top-row">
+                                <span class="kpi-label">F1-Score извлечения полей</span>
+                                <div class="kpi-icon-pill success"><svg><use href="#icon-check"></use></svg></div>
+                            </div>
+                            <div class="kpi-value-row">
+                                <span class="kpi-value" id="exp-f1-value">—</span>
+                            </div>
                             <span class="kpi-sub" id="exp-f1-sub">Прирост точности: —</span>
                         </div>
+
+                        <div class="kpi-card">
+                            <div class="kpi-top-row">
+                                <span class="kpi-label">Точность классификации</span>
+                                <div class="kpi-icon-pill success"><svg><use href="#icon-zap"></use></svg></div>
+                            </div>
+                            <div class="kpi-value-row">
+                                <span class="kpi-value" id="exp-acc-value">—</span>
+                            </div>
+                            <span class="kpi-sub" id="exp-time-sub">Время инференса: —</span>
+                        </div>
                     </div>
-                    <div class="kpi-card">
-                        <div class="kpi-icon">🏷️</div>
-                        <div class="kpi-content">
-                            <span class="kpi-label">Точность классификатора</span>
-                            <span class="kpi-value" id="exp-acc-value">—</span>
-                            <span class="kpi-sub" id="exp-time-sub">Инференс: — мс</span>
+
+                    <!-- Robustness Matrix Table -->
+                    <div class="workbench-matrix-card">
+                        <div class="panel-header-row">
+                            <span class="panel-title">
+                                <svg><use href="#icon-layers"></use></svg>
+                                Матрица устойчивости к искажениям (Robustness Matrix)
+                            </span>
+                            <span style="font-size: 11px; color: var(--text-muted);" id="experiments-timestamp">Тестирование ещё не запускалось</span>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table" id="experiments-table">
+                                <thead>
+                                    <tr>
+                                        <th>Искажение / Артефакт</th>
+                                        <th>CER (Базовый)</th>
+                                        <th>CER (OpenCV)</th>
+                                        <th>Снижение CER</th>
+                                        <th>F1 Полей (Базовый)</th>
+                                        <th>F1 Полей (OpenCV)</th>
+                                        <th>Точность типа</th>
+                                        <th>Время (CPU)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="experiments-table-body">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px 0;">
+                                            Нажмите «Запустить бенчмарк» для расчета метрик
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
 
-                <!-- Таблица стресс-теста -->
-                <div class="dashboard-section">
-                    <div class="section-header-row">
-                        <h3>Матрица устойчивости к искажениям (Robustness Matrix)</h3>
-                        <span class="text-muted" id="experiments-timestamp">Тестирование ещё не запускалось</span>
+                <!-- Screen 6: Settings (Настройки системы) -->
+                <div id="page-settings" class="page">
+                    <div class="page-header-row">
+                        <div>
+                            <h2 class="page-title">Настройки системы DocIntel</h2>
+                            <p class="page-subtitle">Параметры микросервисов, сетевые адреса и управление средой</p>
+                        </div>
                     </div>
-                    <div class="table-container">
-                        <table class="data-table" id="experiments-table">
-                            <thead>
-                                <tr>
-                                    <th>Искажение / Артефакт</th>
-                                    <th>CER (Базовый)</th>
-                                    <th>CER (OpenCV)</th>
-                                    <th>Снижение CER</th>
-                                    <th>F1 Полей (Базовый)</th>
-                                    <th>F1 Полей (OpenCV)</th>
-                                    <th>Точность типа</th>
-                                    <th>Время (CPU)</th>
-                                </tr>
-                            </thead>
-                            <tbody id="experiments-table-body">
-                                <tr>
-                                    <td colspan="8" class="text-center text-muted">Нажмите «🚀 Запустить бенчмарк», чтобы рассчитать метрики на реальных документах</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
 
-                <!-- Исследовательские выводы -->
-                <div class="dashboard-section" style="margin-top: 24px;">
-                    <h3>Анализ алгоритмических эффектов</h3>
-                    <div class="features-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 12px;">
-                        <div class="status-card">
-                            <div class="status-icon">📐</div>
-                            <div class="status-info">
-                                <h3>Выравнивание перекоса (Deskew)</h3>
-                                <p class="text-muted" style="font-size: 0.82em; margin-top: 4px;">При наклоне документа на 12.5° базовый детектор строк теряет фрагменты текста. Предобработка Радона компенсирует угол до 0°, восстанавливая чтение.</p>
-                            </div>
-                        </div>
-                        <div class="status-card">
-                            <div class="status-icon">🔍</div>
-                            <div class="status-info">
-                                <h3>Адаптивный контраст (CLAHE)</h3>
-                                <p class="text-muted" style="font-size: 0.82em; margin-top: 4px;">Устраняет неравномерные тени от смартфона и выравнивает гистограмму освещенности, предотвращая слияние букв с фоном.</p>
-                            </div>
-                        </div>
-                        <div class="status-card">
-                            <div class="status-icon">📖</div>
-                            <div class="status-info">
-                                <h3>Словарная и пунктуационная постобработка</h3>
-                                <p class="text-muted" style="font-size: 0.82em; margin-top: 4px;">Восстанавливает пропущенные нейросетью запятые в рублёвых суммах (162,72 руб.), дефисы в сериях и додумывает неполные русские слова.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                    <div style="max-width: 600px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 20px; box-shadow: var(--shadow-xs);">
+                        <div style="font-size: 13.5px; font-weight: 600; margin-bottom: 16px;">Параметры подключения</div>
 
-            <!-- Settings -->
-            <div id="page-settings" class="page">
-                <h2>Настройки</h2>
-                <div class="settings-group">
-                    <h3>Подключение</h3>
-                    <div class="setting-item">
-                        <label>Java Backend URL</label>
-                        <input type="text" id="setting-backend-url" value="http://localhost:8085" />
+                        <div style="margin-bottom: 14px;">
+                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">Java Backend API URL</label>
+                            <input type="text" id="setting-backend-url" value="http://localhost:8085" style="width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 12px;" />
+                        </div>
+
+                        <div style="margin-bottom: 18px;">
+                            <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px;">Python AI Service URL</label>
+                            <input type="text" id="setting-ai-url" value="http://localhost:8000" readonly style="width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: 12px; background: #F1F5F9; color: var(--text-muted);" />
+                            <small style="color: var(--text-muted); font-size: 11px;">Маршрутизируется через Java Backend Client</small>
+                        </div>
+
+                        <button class="btn btn-primary" id="btn-save-settings">
+                            <svg><use href="#icon-check"></use></svg>
+                            <span>Сохранить настройки</span>
+                        </button>
                     </div>
-                    <div class="setting-item">
-                        <label>AI Service URL</label>
-                        <input type="text" id="setting-ai-url" value="http://localhost:8000" readonly />
-                        <small class="text-muted">Управляется через Java Backend</small>
-                    </div>
-                    <button class="btn btn-primary" id="btn-save-settings">💾 Сохранить</button>
                 </div>
-            </div>
-        </main>
+            </main>
+        </div>
     </div>
 
-    <!-- Модальное окно анализа и OCR инспектора -->
+    <!-- 4. The Flagship 3-Pane Document Inspector Modal (Экран 4) -->
     <div id="analysis-modal" class="modal-overlay" style="display: none;">
         <div class="modal-container">
-            <div class="modal-header">
-                <h3>
-                    <span>📄</span>
-                    <span id="modal-doc-title">Документ</span>
-                    <span id="modal-doc-status" class="badge badge-uploaded">UPLOADED</span>
-                </h3>
-                <button class="modal-close-btn" id="modal-btn-close">&times;</button>
+            <!-- Modal Toolbar -->
+            <div class="inspector-toolbar">
+                <div class="toolbar-left">
+                    <button class="btn btn-secondary btn-sm" id="modal-btn-close">
+                        <svg><use href="#icon-x"></use></svg>
+                        <span>Закрыть</span>
+                    </button>
+                    <span id="modal-format-badge" class="format-badge pdf">DOC</span>
+                    <span class="doc-name-heading" id="modal-doc-title">Документ</span>
+                    <span id="modal-doc-status" class="status-pill success">
+                        <span class="dot"></span>
+                        <span>COMPLETED</span>
+                    </span>
+                    <div id="modal-classification-badge"></div>
+                    <div id="modal-validation-badge" style="display: none;"></div>
+                </div>
+
+                <div class="toolbar-right">
+                    <div class="quality-metrics-bar" id="modal-metrics-bar" style="font-size: 11px; color: var(--text-muted);"></div>
+                    <button class="btn btn-secondary btn-sm" id="modal-btn-export-csv" title="Экспорт полей в CSV">
+                        <svg><use href="#icon-download"></use></svg>
+                        <span>CSV</span>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" id="modal-btn-export-json" title="Экспорт документа в JSON">
+                        <span>JSON</span>
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="modal-btn-analyze">
+                        <svg><use href="#icon-zap"></use></svg>
+                        <span>AI-анализ</span>
+                    </button>
+                </div>
             </div>
-            <div class="modal-body">
-                <div class="modal-toolbar">
-                    <div class="quality-metrics-bar" id="modal-metrics-bar">
-                        <span class="text-muted">Метрики качества будут рассчитаны при анализе</span>
+
+            <!-- 3-Pane Workspace: Left 45% (Scan), Center 25% (OCR), Right 30% (Fields & QA) -->
+            <div class="inspector-workspace">
+                <!-- Left Pane: Scan & BBoxes (45%) -->
+                <div class="pane-scan">
+                    <div class="pane-toolbar">
+                        <div class="pane-toolbar-title">
+                            <svg><use href="#icon-eye"></use></svg>
+                            <span>Оригинал документа</span>
+                            <span id="modal-viewer-info" style="font-size: 10.5px; color: var(--text-muted); font-weight: normal;">(300 DPI)</span>
+                        </div>
+                        <div style="display: flex; gap: 4px; align-items: center;">
+                            <div id="page-nav-controls" style="display: none; align-items: center; gap: 4px; margin-right: 6px;">
+                                <button class="btn-tool" id="btn-prev-page" title="Предыдущая страница">◀</button>
+                                <span id="page-nav-badge" style="font-family: var(--font-mono); font-size: 11px; padding: 0 4px;">1 / 1</span>
+                                <button class="btn-tool" id="btn-next-page" title="Следующая страница">▶</button>
+                            </div>
+                            <button class="btn-tool" id="btn-zoom-out" title="Уменьшить">−</button>
+                            <span id="zoom-level-badge" style="font-family: var(--font-mono); font-size: 11px; padding: 0 4px;">100%</span>
+                            <button class="btn-tool" id="btn-zoom-in" title="Увеличить">+</button>
+                            <button class="btn-tool" id="btn-zoom-reset" title="Масштаб 1:1">1:1</button>
+                            <button class="btn-tool" id="btn-zoom-fit" title="Вписать по ширине">↔ Вписать</button>
+                            <button class="btn-tool active" id="toggle-fields-layer" title="Показать/скрыть рамки полей">Рамки</button>
+                            <button class="btn-tool active" id="toggle-ocr-layer" title="Сетка OCR">Сетка</button>
+                        </div>
                     </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <div id="modal-classification-badge"></div>
-                        <div id="modal-validation-badge" style="display: none;"></div>
-                        <button class="btn btn-secondary btn-sm" id="modal-btn-export-csv" title="Экспорт распознанных полей документа в Excel CSV">
-                            📊 CSV
-                        </button>
-                        <button class="btn btn-secondary btn-sm" id="modal-btn-export-json" title="Экспорт данных документа в JSON">
-                            📦 JSON
-                        </button>
-                        <button class="btn btn-primary" id="modal-btn-analyze">
-                            ⚡ Запустить AI-анализ
-                        </button>
+                    <div class="viewer-scroll-canvas" id="viewer-container">
+                        <div class="scan-artboard-wrapper" id="scan-wrapper">
+                            <img id="scan-img" alt="Скан документа" />
+                            <div class="bbox-layer" id="bbox-overlay-layer"></div>
+                        </div>
                     </div>
                 </div>
-                <div class="modal-columns">
-                    <!-- Скан и Bounding Boxes -->
-                    <div class="viewer-column">
-                        <div class="viewer-header">
-                            <div class="viewer-header-info">
-                                <span class="viewer-title">🖼️ Скан</span>
-                                <span id="modal-viewer-info" class="text-muted">Оригинал</span>
-                            </div>
-                            <div class="viewer-controls">
-                                <div class="btn-group-sm" id="page-nav-controls" style="display: none;">
-                                    <button class="btn-tool" id="btn-prev-page" title="Предыдущая страница">◀</button>
-                                    <span id="page-nav-badge" class="zoom-badge">1 / 1</span>
-                                    <button class="btn-tool" id="btn-next-page" title="Следующая страница">▶</button>
-                                </div>
-                                <div class="btn-group-sm">
-                                    <button class="btn-tool" id="btn-zoom-out" title="Уменьшить (Ctrl + Колёсико вниз)">🔍 −</button>
-                                    <span id="zoom-level-badge" class="zoom-badge">100%</span>
-                                    <button class="btn-tool" id="btn-zoom-in" title="Увеличить (Ctrl + Колёсико вверх)">🔍 +</button>
-                                    <button class="btn-tool" id="btn-zoom-reset" title="Масштаб 1:1">1:1</button>
-                                    <button class="btn-tool" id="btn-zoom-fit" title="Вписать по ширине">↔️ Вписать</button>
-                                </div>
-                                <div class="btn-group-sm">
-                                    <button class="btn-tool active" id="toggle-fields-layer" title="Показать/скрыть извлечённые поля">🏷️ Поля</button>
-                                    <button class="btn-tool active" id="toggle-ocr-layer" title="Показать/скрыть сетку OCR">🔤 Текст</button>
-                                </div>
-                            </div>
+
+                <!-- Center Pane: Full OCR Text Layer (25%) -->
+                <div class="pane-ocr">
+                    <div class="pane-toolbar">
+                        <div class="pane-toolbar-title">
+                            <svg><use href="#icon-file-text"></use></svg>
+                            <span>OCR Текст (<span id="ocr-count-badge">0</span>)</span>
                         </div>
-                        <div class="viewer-content-container" id="viewer-container">
-                            <div class="scan-wrapper" id="scan-wrapper">
-                                <img id="scan-img" class="scan-image" alt="Скан документа" />
-                                <div id="bbox-overlay-layer"></div>
-                            </div>
+                        <button class="btn-tool" id="btn-copy-all-ocr" title="Скопировать весь распознанный текст в буфер обмена">
+                            <svg><use href="#icon-copy"></use></svg>
+                            <span>Копировать</span>
+                        </button>
+                    </div>
+                    <div class="ocr-search-bar">
+                        <input type="text" id="ocr-pane-search" class="ocr-search-input" placeholder="Поиск в тексте документа..." />
+                    </div>
+                    <div class="ocr-content-list" id="ocr-blocks-list">
+                        <p style="color: var(--text-muted); text-align: center; margin-top: 40px;">
+                            Нажмите "AI-анализ", чтобы распознать текст
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Right Pane: Structured Fields & Verification + Q&A (30%) -->
+                <div class="pane-fields">
+                    <div class="inspector-tabs-header inspector-tabs">
+                        <button class="inspector-tab-btn tab-btn active" id="tab-fields-btn" data-tab="fields">
+                            <svg><use href="#icon-file-text"></use></svg>
+                            <span>Поля (<span id="fields-count-badge">0</span>)</span>
+                        </button>
+                        <button class="inspector-tab-btn tab-btn" id="tab-validation-btn" data-tab="validation">
+                            <svg><use href="#icon-check"></use></svg>
+                            <span>Проверка (<span id="validation-count-badge">0</span>)</span>
+                        </button>
+                        <button class="inspector-tab-btn tab-btn" id="tab-qa-btn" data-tab="qa">
+                            <svg><use href="#icon-message-square"></use></svg>
+                            <span>Спросить у ИИ</span>
+                        </button>
+                        <!-- Hidden legacy tab-btn for compatibility -->
+                        <button id="tab-ocr-btn" data-tab="ocr" style="display: none;"></button>
+                    </div>
+
+                    <!-- Fields Tab Content -->
+                    <div class="inspector-tab-pane inspector-tab-content active" id="tab-fields-content">
+                        <div id="fields-list">
+                            <p style="color: var(--text-muted); text-align: center; margin-top: 40px;">
+                                Извлечённые поля появятся после выполнения анализа
+                            </p>
                         </div>
                     </div>
-                    <!-- Структурированные поля, OCR результаты и Валидация (Табы) -->
-                    <div class="ocr-results-column">
-                        <div class="ocr-results-header">
-                            <div class="inspector-tabs">
-                                <button class="tab-btn active" id="tab-fields-btn" data-tab="fields">
-                                    🏷️ Поля (<span id="fields-count-badge">0</span>)
-                                </button>
-                                <button class="tab-btn" id="tab-ocr-btn" data-tab="ocr">
-                                    🔤 Текст (<span id="ocr-count-badge">0</span>)
-                                </button>
-                                <button class="tab-btn" id="tab-validation-btn" data-tab="validation">
-                                    ✅ Проверка (<span id="validation-count-badge">0</span>)
-                                </button>
-                                <button class="tab-btn" id="tab-qa-btn" data-tab="qa">
-                                    💬 Спросить у ИИ
-                                </button>
-                            </div>
-                        </div>
-                        <div class="inspector-tab-content active" id="tab-fields-content">
-                            <div class="fields-list" id="fields-list">
-                                <p class="text-muted text-center" style="margin-top: 40px;">
-                                    Нажмите "⚡ Запустить AI-анализ", чтобы извлечь структурированные поля
-                                </p>
-                            </div>
-                        </div>
-                        <div class="inspector-tab-content" id="tab-ocr-content" style="display: none;">
-                            <div class="ocr-blocks-list" id="ocr-blocks-list">
-                                <p class="text-muted text-center" style="margin-top: 40px;">
-                                    Нажмите "⚡ Запустить AI-анализ", чтобы распознать текст на документе
-                                </p>
-                            </div>
-                        </div>
-                        <div class="inspector-tab-content" id="tab-validation-content" style="display: none;">
-                            <div class="validation-list" id="validation-list">
-                                <p class="text-muted text-center" style="margin-top: 40px;">
-                                    Правила валидации (ИНН, даты, суммы, VIN) будут проверены при анализе
-                                </p>
-                            </div>
-                        </div>
-                        <div class="inspector-tab-content" id="tab-qa-content" style="display: none;">
-                            <div class="qa-container">
-                                <div class="qa-input-box">
-                                    <div class="qa-input-row">
-                                        <input type="text" id="qa-input" class="qa-text-input" placeholder="Задайте вопрос к документу... (Например: Кто собственник?)" />
-                                        <button class="btn btn-primary" id="btn-qa-ask" title="Отправить вопрос (Enter)">
-                                            🚀 Найти
-                                        </button>
-                                    </div>
-                                    <div class="qa-chips">
-                                        <button class="qa-chip" data-question="Кто собственник или владелец?">👤 Собственник</button>
-                                        <button class="qa-chip" data-question="Какая сумма к оплате?">💰 Сумма к оплате</button>
-                                        <button class="qa-chip" data-question="Какой идентификационный номер VIN или номер документа?">🔢 Номер / VIN</button>
-                                        <button class="qa-chip" data-question="Когда и кем выдан документ?">📅 Дата выдачи</button>
-                                    </div>
-                                </div>
 
-                                <div id="qa-status-loading" class="qa-loading-indicator" style="display: none;">
-                                    <div class="spinner-inline"></div>
-                                    <span>AI ищет ответ в тексте документа...</span>
-                                </div>
+                    <!-- Validation Tab Content -->
+                    <div class="inspector-tab-pane inspector-tab-content" id="tab-validation-content" style="display: none;">
+                        <div id="validation-list">
+                            <p style="color: var(--text-muted); text-align: center; margin-top: 40px;">
+                                Правила валидации будут проверены при анализе
+                            </p>
+                        </div>
+                    </div>
 
-                                <div id="qa-answers-list" class="qa-answers-list">
-                                    <div class="qa-empty-state">
-                                        <div class="qa-empty-icon">💬</div>
-                                        <h4>Естественный диалог с документом</h4>
-                                        <p class="text-muted">Задайте любой вопрос на русском языке. AI найдёт точный ответ, процитирует источник и подсветит координаты на скане.</p>
+                    <!-- Q&A Natural Language Tab Content -->
+                    <div class="inspector-tab-pane inspector-tab-content" id="tab-qa-content" style="display: none;">
+                        <div class="qa-wrapper">
+                            <div class="qa-query-box">
+                                <div class="qa-input-container">
+                                    <input type="text" id="qa-input" class="qa-input-field" placeholder="Задайте вопрос к документу (Enter)..." />
+                                    <button class="btn btn-primary btn-sm" id="btn-qa-ask">
+                                        <svg><use href="#icon-zap"></use></svg>
+                                        <span>Спросить</span>
+                                    </button>
+                                </div>
+                                <div class="qa-quick-chips">
+                                    <button class="qa-chip-btn qa-chip" data-question="Кто собственник или владелец?">Собственник</button>
+                                    <button class="qa-chip-btn qa-chip" data-question="Какая сумма к оплате?">Сумма к оплате</button>
+                                    <button class="qa-chip-btn qa-chip" data-question="Какой идентификационный номер VIN или номер документа?">Номер / VIN</button>
+                                    <button class="qa-chip-btn qa-chip" data-question="Когда и кем выдан документ?">Дата выдачи</button>
+                                </div>
+                            </div>
+
+                            <div id="qa-status-loading" style="display: none; padding: 10px; background: #EFF6FF; border-radius: var(--radius-md); font-size: 12px; color: var(--primary);">
+                                AI ищет ответ и вычисляет координаты...
+                            </div>
+
+                            <div id="qa-answers-list" class="qa-results-container">
+                                <div style="text-align: center; color: var(--text-muted); padding: 32px 10px;">
+                                    <div style="margin-bottom: 8px;">
+                                        <svg style="width: 28px; height: 28px; color: var(--text-muted);"><use href="#icon-message-square"></use></svg>
                                     </div>
+                                    <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Естественный диалог с документом</div>
+                                    <div style="font-size: 11.5px;">Задайте любой вопрос на русском языке — AI найдет ответ и подсветит координаты на скане.</div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
+                    <!-- Hidden legacy OCR tab container for code compatibility -->
+                    <div id="tab-ocr-content" style="display: none;"></div>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- 5. Floating Toast Alerts Container -->
+    <div id="toast-container" class="toast-container"></div>
 
     <script src="scripts/api.js"></script>
     <script src="scripts/app.js"></script>

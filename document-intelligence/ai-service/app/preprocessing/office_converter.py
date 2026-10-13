@@ -391,3 +391,4 @@ class OfficeDocumentConverter:
 
         pages.append((np.array(current_img)[:, :, ::-1], current_blocks))
         return pages
+

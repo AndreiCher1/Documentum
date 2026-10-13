@@ -6,3 +6,4 @@ public record DocumentAskRequest(
         @NotBlank(message = "Вопрос не может быть пустым")
         String question
 ) {}
+

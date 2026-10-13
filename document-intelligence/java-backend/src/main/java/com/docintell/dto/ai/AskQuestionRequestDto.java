@@ -14,3 +14,4 @@ public record AskQuestionRequestDto(
         @JsonProperty("document_type")
         String documentType
 ) {}
+
