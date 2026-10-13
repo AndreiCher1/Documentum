@@ -3,12 +3,45 @@
 server:
   port: ${SERVER_PORT:8085}
 
-# Настройки загрузки файлов
+# Настройки Spring
 spring:
+  application:
+    name: document-intelligence-backend
+
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
   servlet:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
+
+  # Конфигурация базы данных (профиль dev: встроенная СУБД с поддержкой PostgreSQL-синтаксиса)
+  datasource:
+    url: ${DB_URL:jdbc:h2:file:./data/docintelldb;AUTO_SERVER=TRUE;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+    username: ${DB_USER:sa}
+    password: ${DB_PASSWORD:}
+
+  # JPA & Hibernate
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 25
+
+  # Консоль базы данных (доступна по http://localhost:8085/h2-console в dev режиме)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: false
 
 # URL Python AI-сервиса
 ai:
@@ -19,6 +52,7 @@ ai:
 logging:
   level:
     com.docintell: DEBUG
+    org.hibernate.SQL: DEBUG
     root: INFO
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"

@@ -33,7 +33,9 @@ public record HealthStatusResponse(
 
     public record AiServiceStatus(
             String status,
+            @com.fasterxml.jackson.annotation.JsonProperty("models_loaded")
             boolean modelsLoaded,
+            @com.fasterxml.jackson.annotation.JsonProperty("ocr_ready")
             boolean ocrReady,
             String version
     ) {}

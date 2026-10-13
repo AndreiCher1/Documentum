@@ -89,6 +89,13 @@ function createWindow() {
     if (process.argv.includes('--dev')) {
         mainWindow.webContents.openDevTools();
     }
+
+    // Клавиша F12 для переключения инструментов разработчика
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'F12' && input.type === 'keyDown') {
+            mainWindow.webContents.toggleDevTools();
+        }
+    });
 }
 
 /**

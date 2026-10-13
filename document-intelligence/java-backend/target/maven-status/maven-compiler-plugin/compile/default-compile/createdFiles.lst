@@ -1,9 +1,0 @@
-com\docintell\dto\ErrorResponse.class
-com\docintell\config\WebConfig.class
-com\docintell\exception\GlobalExceptionHandler.class
-com\docintell\service\AiServiceClient.class
-com\docintell\dto\HealthStatusResponse$AiServiceStatus.class
-com\docintell\DocIntelligenceApplication.class
-com\docintell\controller\HealthController.class
-com\docintell\config\AppConfig.class
-com\docintell\dto\HealthStatusResponse.class

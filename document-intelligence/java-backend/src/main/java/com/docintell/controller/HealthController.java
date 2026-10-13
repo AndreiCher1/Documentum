@@ -43,27 +43,23 @@ public class HealthController {
     private static final Logger logger = LoggerFactory.getLogger(HealthController.class);
 
     private final AiServiceClient aiServiceClient;
+    private final com.docintell.service.DatabaseHealthService databaseHealthService;
 
-    /**
-     * Dependency Injection через конструктор.
-     *
-     * Spring автоматически находит AiServiceClient (он помечен @Service)
-     * и передаёт его сюда. Нам не нужно писать new AiServiceClient(...).
-     */
-    public HealthController(AiServiceClient aiServiceClient) {
+    public HealthController(
+            AiServiceClient aiServiceClient,
+            com.docintell.service.DatabaseHealthService databaseHealthService
+    ) {
         this.aiServiceClient = aiServiceClient;
+        this.databaseHealthService = databaseHealthService;
     }
 
     /**
      * GET /api/health — проверка здоровья всей системы.
      *
      * Этот endpoint проверяет:
-     * 1. Java backend (раз мы отвечаем — значит работает)
+     * 1. Java backend
      * 2. Python AI-сервис (вызываем его /health)
-     * 3. База данных (добавим на этапе 3)
-     *
-     * Electron вызывает этот endpoint, чтобы показать пользователю
-     * статус всех компонентов системы.
+     * 3. База данных (проверяем реальное соединение через DatabaseHealthService)
      */
     @GetMapping("/health")
     public ResponseEntity<HealthStatusResponse> healthCheck() {
@@ -72,19 +68,24 @@ public class HealthController {
         // Проверяем AI-сервис
         AiServiceStatus aiStatus = aiServiceClient.checkHealth();
 
+        // Проверяем базу данных
+        String dbStatus = databaseHealthService.checkStatus();
+
         String overallStatus;
-        if (aiStatus != null) {
+        if (aiStatus != null && dbStatus.startsWith("connected")) {
             overallStatus = "healthy";
         } else {
-            overallStatus = "degraded"; // Работаем, но AI-сервис недоступен
-            aiStatus = new AiServiceStatus("unavailable", false, false, "unknown");
+            overallStatus = "degraded"; // Работаем, но один из компонентов недоступен
+            if (aiStatus == null) {
+                aiStatus = new AiServiceStatus("unavailable", false, false, "unknown");
+            }
         }
 
         HealthStatusResponse response = new HealthStatusResponse(
                 overallStatus,
                 "running",
                 aiStatus,
-                "not_configured",  // БД добавим на этапе 3
+                dbStatus,
                 LocalDateTime.now()
         );
 

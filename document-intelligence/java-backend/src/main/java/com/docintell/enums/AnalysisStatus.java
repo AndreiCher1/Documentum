@@ -24,3 +24,4 @@ public enum AnalysisStatus {
         return description;
     }
 }
+

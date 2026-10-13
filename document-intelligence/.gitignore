@@ -1,0 +1,16 @@
+# Python
+venv/
+__pycache__/
+.env
+node_modules/
+
+# Java
+target/
+*.class
+*.db
+
+# Медиа и загрузки
+*.png
+*.jpg
+*.pdf
+uploads/

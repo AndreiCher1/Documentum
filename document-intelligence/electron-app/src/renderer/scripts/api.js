@@ -60,6 +60,140 @@ const ApiClient = {
     },
 
     /**
+     * Загрузка документа на сервер (POST /api/documents).
+     *
+     * @param {File} file — объект файла из input или drop события
+     * @returns {Promise<Object>} метаданные загруженного документа
+     */
+    async uploadDocument(file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await fetch(`${this.baseUrl}/api/documents`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `Ошибка загрузки (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
+     * Получение постраничного списка документов (GET /api/documents).
+     */
+    async getDocuments(page = 0, size = 20) {
+        const response = await fetch(`${this.baseUrl}/api/documents?page=${page}&size=${size}`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ошибка получения списка документов (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
+     * Получение последних документов для Dashboard (GET /api/documents/recent).
+     */
+    async getRecentDocuments(limit = 5) {
+        const response = await fetch(`${this.baseUrl}/api/documents/recent?limit=${limit}`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ошибка получения последних документов (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
+     * Получение деталей документа по ID (GET /api/documents/{id}).
+     */
+    async getDocument(id) {
+        const response = await fetch(`${this.baseUrl}/api/documents/${id}`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Документ #${id} не найден (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
+     * Удаление документа (DELETE /api/documents/{id}).
+     */
+    async deleteDocument(id) {
+        const response = await fetch(`${this.baseUrl}/api/documents/${id}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok && response.status !== 204) {
+            throw new Error(`Ошибка при удалении документа #${id}`);
+        }
+
+        return true;
+    },
+
+    /**
+     * Получение URL для прямого отображения скана файла.
+     */
+    getDocumentFileUrl(id) {
+        return `${this.baseUrl}/api/documents/${id}/file`;
+    },
+
+    /**
+     * Получение URL превью страницы документа (для растрирования PDF или кэшированного превью).
+     */
+    getDocumentPreviewUrl(id, page = 1) {
+        return `${this.baseUrl}/api/documents/${id}/preview?page=${page}`;
+    },
+
+    /**
+     * Запуск AI-анализа документа (POST /api/documents/{id}/analyze).
+     */
+    async analyzeDocument(id) {
+        const response = await fetch(`${this.baseUrl}/api/documents/${id}/analyze`, {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `Ошибка анализа документа #${id} (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
+     * Получение результатов анализа документа (GET /api/documents/{id}/analysis).
+     */
+    async getDocumentAnalysis(id) {
+        const response = await fetch(`${this.baseUrl}/api/documents/${id}/analysis`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            if (response.status === 404) return null;
+            throw new Error(`Ошибка получения анализа документа #${id} (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
      * Обновить базовый URL.
      * @param {string} url — новый URL
      */

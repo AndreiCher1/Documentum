@@ -21,7 +21,8 @@ public enum FieldType {
     INN("ИНН"),
     VIN("VIN-номер"),
     ORGANIZATION("Организация"),
-    PERSON("ФИО");
+    PERSON("ФИО"),
+    TABLE("Таблица");
 
     private final String title;
 
@@ -32,4 +33,18 @@ public enum FieldType {
     public String getTitle() {
         return title;
     }
+
+    public static FieldType fromString(String value) {
+        if (value == null || value.isBlank()) {
+            return TEXT;
+        }
+        String normalized = value.trim().toUpperCase();
+        for (FieldType type : values()) {
+            if (type.name().equalsIgnoreCase(normalized)) {
+                return type;
+            }
+        }
+        return TEXT;
+    }
 }
+

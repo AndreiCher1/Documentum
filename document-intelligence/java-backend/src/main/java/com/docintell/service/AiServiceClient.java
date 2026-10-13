@@ -61,17 +61,95 @@ public class AiServiceClient {
         try {
             logger.info("Проверка доступности AI-сервиса: {}", aiServiceUrl);
 
-            AiServiceStatus response = restTemplate.getForObject(
+            org.springframework.http.client.SimpleClientHttpRequestFactory healthFactory =
+                    new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            healthFactory.setConnectTimeout(2000);
+            healthFactory.setReadTimeout(3000);
+            RestTemplate healthRestTemplate = new RestTemplate(healthFactory);
+
+            AiServiceStatus response = healthRestTemplate.getForObject(
                     aiServiceUrl + "/health",
                     AiServiceStatus.class
             );
 
             logger.info("AI-сервис доступен: {}", response);
             return response;
-
-        } catch (RestClientException e) {
+        } catch (Exception e) {
             logger.warn("AI-сервис недоступен: {}", e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Отправляет файл в Python AI-сервис для анализа (предобработка + OCR).
+     *
+     * @param fileBytes        байты документа
+     * @param originalFilename исходное имя файла (для определения расширения)
+     * @return структурированный результат анализа
+     */
+    public com.docintell.dto.ai.AiAnalyzeResponse analyzeDocument(byte[] fileBytes, String originalFilename) {
+        try {
+            logger.info("Отправка документа '{}' ({} байт) в AI-сервис: {}/analyze",
+                    originalFilename, fileBytes.length, aiServiceUrl);
+
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+
+            org.springframework.util.MultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
+            org.springframework.core.io.ByteArrayResource fileResource = new org.springframework.core.io.ByteArrayResource(fileBytes) {
+                @Override
+                public String getFilename() {
+                    return originalFilename;
+                }
+            };
+            body.add("file", fileResource);
+
+            org.springframework.http.HttpEntity<org.springframework.util.MultiValueMap<String, Object>> requestEntity =
+                    new org.springframework.http.HttpEntity<>(body, headers);
+
+            com.docintell.dto.ai.AiAnalyzeResponse response = restTemplate.postForObject(
+                    aiServiceUrl + "/analyze",
+                    requestEntity,
+                    com.docintell.dto.ai.AiAnalyzeResponse.class
+            );
+
+            logger.info("Ответ от AI-сервиса успешно получен: status={}, блоков OCR={}",
+                    response != null ? response.status() : "null",
+                    response != null && response.ocrResults() != null ? response.ocrResults().size() : 0);
+
+            return response;
+
+        } catch (RestClientException e) {
+            logger.error("Ошибка при вызове AI-сервиса /analyze: {}", e.getMessage(), e);
+            throw new RuntimeException("AI-сервис временно недоступен: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Рендерит страницу документа (PDF) в PNG через AI-сервис.
+     */
+    public byte[] renderPage(byte[] fileBytes, String originalFilename, int page) {
+        try {
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+
+            org.springframework.util.MultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
+            org.springframework.core.io.ByteArrayResource fileResource = new org.springframework.core.io.ByteArrayResource(fileBytes) {
+                @Override
+                public String getFilename() {
+                    return originalFilename;
+                }
+            };
+            body.add("file", fileResource);
+
+            String url = aiServiceUrl + "/render-page?page=" + page;
+            org.springframework.http.HttpEntity<org.springframework.util.MultiValueMap<String, Object>> requestEntity =
+                    new org.springframework.http.HttpEntity<>(body, headers);
+
+            return restTemplate.postForObject(url, requestEntity, byte[].class);
+        } catch (Exception e) {
+            logger.warn("Ошибка вызова /render-page: {}", e.getMessage());
+            throw new RuntimeException("Не удалось отрендерить страницу: " + e.getMessage(), e);
         }
     }
 }

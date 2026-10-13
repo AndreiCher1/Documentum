@@ -1,0 +1,17 @@
+# Конфигурация для реального сервера PostgreSQL
+# Активируется запуском с аргументом: --spring.profiles.active=postgres
+# или переменной окружения: SPRING_PROFILES_ACTIVE=postgres
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:docintell}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+

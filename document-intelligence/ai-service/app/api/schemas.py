@@ -9,6 +9,7 @@ Pydantic — это библиотека для валидации данных 
 Java backend будет получать ответы именно в таком формате.
 """
 
+from typing import List, Optional
 from pydantic import BaseModel
 
 
@@ -20,17 +21,32 @@ class HealthResponse(BaseModel):
     version: str
 
 
+class QualityMetricsDto(BaseModel):
+    """Метрики качества изображения документа."""
+    blur_score: float
+    is_blurry: bool
+    brightness: float
+    contrast: float
+    width: int
+    height: int
+    skew_angle: float
+
+
 class OcrResult(BaseModel):
-    """Один распознанный текстовый блок."""
+    """Один распознанный текстовый блок (строка или фрагмент текста)."""
     text: str
     confidence: float
-    bbox: list[int]  # [x1, y1, x2, y2]
+    bbox: List[int]  # [x1, y1, x2, y2]
+    page: int = 1    # Номер страницы документа
 
 
 class DocumentTypeResult(BaseModel):
     """Результат определения типа документа."""
     type: str
     confidence: float
+    display_name: Optional[str] = None
+    explanation: Optional[str] = None
+    matched_keywords: Optional[List[str]] = None
 
 
 class ExtractedField(BaseModel):
@@ -40,16 +56,20 @@ class ExtractedField(BaseModel):
     value: str
     field_type: str
     confidence: float
-    bbox: list[int] | None = None
+    bbox: Optional[List[int]] = None
+    page: int = 1
 
 
 class AnalyzeResponse(BaseModel):
     """Полный ответ анализа документа."""
     status: str
     processing_time_ms: float
+    total_pages: int = 1
+    quality: Optional[QualityMetricsDto] = None
     document_type: DocumentTypeResult
-    ocr_results: list[OcrResult]
-    fields: list[ExtractedField]
+    ocr_results: List[OcrResult]
+    fields: List[ExtractedField]
+    tables: Optional[List[dict]] = None
+    validation: Optional[dict] = None
     overall_confidence: float
-    message: str | None = None
-
+    message: Optional[str] = None
