@@ -194,6 +194,39 @@ const ApiClient = {
     },
 
     /**
+     * Полнотекстовый и параметрический поиск документов (POST /api/search).
+     * @param {Object} params — параметры запроса (query, documentType, dateFrom, dateTo, minConfidence, status, page, size)
+     */
+    async searchDocuments(params = {}) {
+        const payload = {
+            query: params.query || '',
+            documentType: params.documentType && params.documentType !== 'ALL' ? params.documentType : null,
+            dateFrom: params.dateFrom || null,
+            dateTo: params.dateTo || null,
+            minConfidence: params.minConfidence !== undefined && params.minConfidence !== '' ? parseFloat(params.minConfidence) : null,
+            status: params.status && params.status !== 'ALL' ? params.status : null,
+            page: params.page !== undefined ? params.page : 0,
+            size: params.size !== undefined ? params.size : 20
+        };
+
+        const response = await fetch(`${this.baseUrl}/api/search`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `Ошибка выполнения поиска (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
      * Обновить базовый URL.
      * @param {string} url — новый URL
      */

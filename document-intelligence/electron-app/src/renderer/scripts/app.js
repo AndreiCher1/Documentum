@@ -20,6 +20,7 @@ const App = {
         this.setupFileUpload();
         this.setupDocumentsPage();
         this.setupAnalysisModal();
+        this.setupSearchPage();
         this.setupSettings();
 
         // Проверяем доступность сервисов и загружаем статистику
@@ -61,6 +62,8 @@ const App = {
             this.loadDocuments();
         } else if (pageName === 'dashboard') {
             this.loadDashboardData();
+        } else if (pageName === 'search') {
+            this.performSearch();
         }
     },
 
@@ -447,6 +450,269 @@ const App = {
                     this.checkHealth();
                 }
             });
+        }
+    },
+
+    /**
+     * === Полнотекстовый и параметрический поиск (Этап 10) ===
+     */
+    searchDebounceTimer: null,
+
+    setupSearchPage() {
+        const searchInput = document.getElementById('search-input');
+        const clearBtn = document.getElementById('search-clear-btn');
+        const btnExec = document.getElementById('btn-search-exec');
+        const btnReset = document.getElementById('btn-search-reset');
+        const filterType = document.getElementById('search-filter-type');
+        const filterStatus = document.getElementById('search-filter-status');
+        const filterDateFrom = document.getElementById('search-filter-date-from');
+        const filterDateTo = document.getElementById('search-filter-date-to');
+        const filterConf = document.getElementById('search-filter-conf');
+        const confLabel = document.getElementById('search-filter-conf-label');
+
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                if (clearBtn) clearBtn.style.display = searchInput.value ? 'block' : 'none';
+                clearTimeout(this.searchDebounceTimer);
+                this.searchDebounceTimer = setTimeout(() => this.performSearch(), 400);
+            });
+
+            searchInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    clearTimeout(this.searchDebounceTimer);
+                    this.performSearch();
+                }
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                if (searchInput) searchInput.value = '';
+                clearBtn.style.display = 'none';
+                this.performSearch();
+            });
+        }
+
+        if (filterConf && confLabel) {
+            filterConf.addEventListener('input', () => {
+                confLabel.textContent = `${filterConf.value}%`;
+                clearTimeout(this.searchDebounceTimer);
+                this.searchDebounceTimer = setTimeout(() => this.performSearch(), 300);
+            });
+        }
+
+        [filterType, filterStatus, filterDateFrom, filterDateTo].forEach(el => {
+            if (el) {
+                el.addEventListener('change', () => this.performSearch());
+            }
+        });
+
+        if (btnExec) {
+            btnExec.addEventListener('click', () => this.performSearch());
+        }
+
+        if (btnReset) {
+            btnReset.addEventListener('click', () => {
+                if (searchInput) searchInput.value = '';
+                if (clearBtn) clearBtn.style.display = 'none';
+                if (filterType) filterType.value = 'ALL';
+                if (filterStatus) filterStatus.value = 'ALL';
+                if (filterDateFrom) filterDateFrom.value = '';
+                if (filterDateTo) filterDateTo.value = '';
+                if (filterConf) filterConf.value = '0';
+                if (confLabel) confLabel.textContent = '0%';
+                this.performSearch();
+            });
+        }
+    },
+
+    async performSearch() {
+        const searchInput = document.getElementById('search-input');
+        const filterType = document.getElementById('search-filter-type');
+        const filterStatus = document.getElementById('search-filter-status');
+        const filterDateFrom = document.getElementById('search-filter-date-from');
+        const filterDateTo = document.getElementById('search-filter-date-to');
+        const filterConf = document.getElementById('search-filter-conf');
+        const resultsContainer = document.getElementById('search-results-list');
+        const resultsCountBadge = document.getElementById('search-results-count');
+
+        if (!resultsContainer) return;
+
+        const query = searchInput ? searchInput.value.trim() : '';
+        const docType = filterType ? filterType.value : 'ALL';
+        const status = filterStatus ? filterStatus.value : 'ALL';
+        const dateFrom = filterDateFrom ? filterDateFrom.value : null;
+        const dateTo = filterDateTo ? filterDateTo.value : null;
+        const minConf = filterConf ? (parseInt(filterConf.value, 10) / 100.0) : 0;
+
+        resultsContainer.innerHTML = `
+            <div class="placeholder-box" style="padding: 40px;">
+                <span class="placeholder-icon">⏳</span>
+                <p>Выполняется поиск документов...</p>
+            </div>
+        `;
+
+        try {
+            const data = await ApiClient.searchDocuments({
+                query,
+                documentType: docType,
+                status,
+                dateFrom,
+                dateTo,
+                minConfidence: minConf,
+                page: 0,
+                size: 50
+            });
+
+            this.renderSearchResults(data, query);
+        } catch (error) {
+            console.error('Ошибка поиска документов:', error);
+            resultsContainer.innerHTML = `
+                <div class="alert-box error" style="display: block;">
+                    ❌ Не удалось выполнить поиск: ${this.escapeHtml(error.message)}
+                </div>
+            `;
+            if (resultsCountBadge) {
+                resultsCountBadge.textContent = 'Ошибка выполнения запроса';
+            }
+        }
+    },
+
+    renderSearchResults(data, query) {
+        const resultsContainer = document.getElementById('search-results-list');
+        const resultsCountBadge = document.getElementById('search-results-count');
+
+        if (!resultsContainer) return;
+
+        const items = data.items || [];
+        const total = data.totalElements !== undefined ? data.totalElements : items.length;
+
+        if (resultsCountBadge) {
+            resultsCountBadge.textContent = total > 0
+                ? `Найдено документов: ${total}`
+                : 'По запросу ничего не найдено';
+        }
+
+        if (items.length === 0) {
+            resultsContainer.innerHTML = `
+                <div class="placeholder-box">
+                    <span class="placeholder-icon">🔍</span>
+                    <p>По вашему запросу ничего не найдено</p>
+                    <p class="text-muted">Попробуйте изменить поисковую фразу или сбросить фильтры</p>
+                </div>
+            `;
+            return;
+        }
+
+        resultsContainer.innerHTML = items.map(item => {
+            const icon = this.getDocumentTypeIcon(item.documentType);
+            const typeDisplay = item.documentTypeDisplayName || item.documentType || 'Не определён';
+            const statusClass = this.getStatusBadgeClass(item.status);
+            const confPct = item.overallConfidence ? Math.round(item.overallConfidence * 100) : 0;
+            const sizeStr = this.formatFileSize(item.fileSize);
+            const dateStr = this.formatDate(item.createdAt);
+
+            // Бейдж уверенности
+            let confBadgeHtml = '';
+            if (item.overallConfidence !== null && item.overallConfidence !== undefined && item.overallConfidence > 0) {
+                const confColorClass = confPct >= 75 ? 'healthy' : (confPct >= 40 ? 'warning' : 'error');
+                confBadgeHtml = `<span class="status-badge ${confColorClass}">${confPct}% уверенность</span>`;
+            }
+
+            // Извлечённые поля
+            let fieldsHtml = '';
+            if (item.matchedFields && item.matchedFields.length > 0) {
+                const fieldPills = item.matchedFields.map(f => {
+                    const disp = this.escapeHtml(f.displayName || f.fieldName);
+                    const val = this.safeHighlightHtml(f.fieldValue);
+                    return `<span class="search-field-pill"><span class="search-field-pill-label">${disp}:</span> ${val}</span>`;
+                }).join('');
+                fieldsHtml = `<div class="search-matched-fields">${fieldPills}</div>`;
+            }
+
+            // Сниппеты текста
+            let snippetsHtml = '';
+            if (item.snippets && item.snippets.length > 0) {
+                const snippetItems = item.snippets.map(s => {
+                    return `<div class="search-snippet-item">💬 ${this.safeHighlightHtml(s)}</div>`;
+                }).join('');
+                snippetsHtml = `<div class="search-result-snippets">${snippetItems}</div>`;
+            }
+
+            return `
+                <div class="search-result-card" data-doc-id="${item.documentId}">
+                    <div class="search-result-card-header">
+                        <div class="search-result-card-header-left">
+                            <span class="search-result-icon">${icon}</span>
+                            <div>
+                                <div class="search-result-title">${this.safeHighlightHtml(item.originalFilename)}</div>
+                                <div class="search-result-sub">
+                                    <span>#${item.documentId}</span>
+                                    <span>•</span>
+                                    <span>${dateStr}</span>
+                                    <span>•</span>
+                                    <span>${sizeStr}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="search-result-badges">
+                            <span class="doc-type-badge ${this.getDocTypeBadgeClass(item.documentType)}">${icon} ${typeDisplay}</span>
+                            <span class="badge ${statusClass}">${item.status}</span>
+                            ${confBadgeHtml}
+                            <button class="btn btn-sm btn-primary btn-open-inspector" data-doc-id="${item.documentId}">
+                                👁️ Открыть в инспекторе
+                            </button>
+                        </div>
+                    </div>
+                    ${fieldsHtml}
+                    ${snippetsHtml}
+                </div>
+            `;
+        }).join('');
+
+        // Навешиваем клики на кнопки открытия карточки
+        resultsContainer.querySelectorAll('.btn-open-inspector').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const docId = btn.dataset.docId;
+                if (docId) this.openAnalysisModal(Number(docId));
+            });
+        });
+
+        // Также клик по всей карточке открывает документ
+        resultsContainer.querySelectorAll('.search-result-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const docId = card.dataset.docId;
+                if (docId) this.openAnalysisModal(Number(docId));
+            });
+        });
+    },
+
+    safeHighlightHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/&lt;mark&gt;/g, '<mark>')
+            .replace(/&lt;\/mark&gt;/g, '</mark>');
+    },
+
+    getDocTypeBadgeClass(type) {
+        switch ((type || '').toUpperCase()) {
+            case 'PASSPORT':
+            case 'PASSPORT_RF':
+                return 'passport';
+            case 'PTS':
+                return 'pts';
+            case 'RECEIPT':
+                return 'receipt';
+            case 'CONTRACT':
+                return 'contract';
+            case 'INVOICE':
+                return 'invoice';
+            default:
+                return 'unknown';
         }
     },
 

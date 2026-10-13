@@ -28,20 +28,45 @@ class ReceiptExtractor(BaseFieldExtractor):
         flat_text = " ".join(line.strip() for line in text.split('\n') if line.strip())
 
         # 1. Итого к оплате
-        total_match = re.search(r'(?:итого\s+к\s+оплате|всего\s+к\s+оплате|к\s+оплате)[:\s]*([\d\s]+(?:[\.,]\d{2})?)\s*(?:руб|р\.|\u20bd)?', flat_text, re.IGNORECASE)
+        total_match = re.search(
+            r'(?:итого(?:\s+к\s+оплат\w*)?|всего(?:\s+к\s+оплат\w*)?|к\s+оплат\w*)[:\s]*([\d\s]+(?:[\.,]\d{2})?)\s*(?:руб|р\.?|\u20bd)?',
+            flat_text,
+            re.IGNORECASE
+        )
+        total_val = None
+        total_bbox = None
+        total_page = 1
+
         if total_match:
-            raw_val = total_match.group(1).strip()
-            clean_val = re.sub(r'\s+', '', raw_val)
-            bbox, page = find_field_bbox(raw_val, ocr_blocks)
+            total_val = total_match.group(1).strip()
+            total_bbox, total_page = find_field_bbox(total_val, ocr_blocks)
+        elif ocr_blocks:
+            # Поиск в OCR блоках: блок "Итого..." и соседний числовой блок
+            for i, b in enumerate(ocr_blocks):
+                b_text = getattr(b, 'text', '') if hasattr(b, 'text') else b.get('text', '')
+                if re.search(r'\b(?:итого|к\s*оплат\w*|всего)\b', b_text, re.IGNORECASE):
+                    # Проверяем соседние блоки
+                    for candidate in ocr_blocks[max(0, i - 1):min(len(ocr_blocks), i + 3)]:
+                        c_text = getattr(candidate, 'text', '') if hasattr(candidate, 'text') else candidate.get('text', '')
+                        num_m = re.search(r'\b(\d{1,6}[\.,]\d{2})\b', c_text)
+                        if num_m:
+                            total_val = num_m.group(1)
+                            total_bbox = getattr(candidate, 'bbox', None) if hasattr(candidate, 'bbox') else candidate.get('bbox')
+                            total_page = getattr(candidate, 'page', 1) if hasattr(candidate, 'page') else candidate.get('page', 1)
+                            break
+                if total_val:
+                    break
+
+        if total_val:
             fields.append(
                 ExtractedFieldValue(
                     name="total_amount",
                     display_name="Итого к оплате",
-                    value=f"{raw_val} руб.",
+                    value=f"{total_val} руб.",
                     field_type="AMOUNT",
                     confidence=0.96,
-                    bbox=bbox,
-                    page=page
+                    bbox=total_bbox,
+                    page=total_page
                 )
             )
 

@@ -190,11 +190,86 @@
 
             <!-- Search -->
             <div id="page-search" class="page">
-                <h2>Поиск</h2>
-                <p class="subtitle">Будет доступен на этапе 10</p>
-                <div class="placeholder-box">
-                    <span class="placeholder-icon">🔍</span>
-                    <p>Поиск документов будет доступен после подключения БД</p>
+                <div class="page-header-row">
+                    <div>
+                        <h2>Поиск и фильтрация</h2>
+                        <p class="subtitle">Полнотекстовый поиск по распознанному тексту, атрибутам и параметрам</p>
+                    </div>
+                </div>
+
+                <div class="search-panel">
+                    <div class="search-bar-row">
+                        <div class="search-input-wrapper">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="search-input" placeholder="Поиск по имени файла, реквизитам (ИНН, VIN, сумма, даты), распознанному тексту..." />
+                            <button id="search-clear-btn" class="search-clear-btn" title="Очистить" style="display: none;">&times;</button>
+                        </div>
+                        <button class="btn btn-primary" id="btn-search-exec">
+                            🔍 Найти
+                        </button>
+                        <button class="btn btn-secondary" id="btn-search-reset" title="Сбросить все фильтры">
+                            🔄 Сброс
+                        </button>
+                    </div>
+
+                    <div class="search-filters-grid">
+                        <div class="filter-group">
+                            <label for="search-filter-type">Тип документа</label>
+                            <select id="search-filter-type" class="filter-select">
+                                <option value="ALL">Все типы документов</option>
+                                <option value="PASSPORT">Паспорт РФ</option>
+                                <option value="PTS">Паспорт ТС (ПТС)</option>
+                                <option value="RECEIPT">Квитанция / Счёт ЖКУ</option>
+                                <option value="INVOICE">Счёт на оплату</option>
+                                <option value="CONTRACT">Договор</option>
+                                <option value="ACT">Акт выполненных работ</option>
+                                <option value="WAYBILL">Накладная</option>
+                                <option value="TAX_2NDFL">Справка 2-НДФЛ</option>
+                                <option value="CERTIFICATE">Свидетельство / Справка</option>
+                                <option value="UNKNOWN">Не определён</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label for="search-filter-status">Статус обработки</label>
+                            <select id="search-filter-status" class="filter-select">
+                                <option value="ALL">Любой статус</option>
+                                <option value="COMPLETED">Обработан (COMPLETED)</option>
+                                <option value="UPLOADED">Загружен (UPLOADED)</option>
+                                <option value="PROCESSING">В обработке (PROCESSING)</option>
+                                <option value="FAILED">Ошибка (FAILED)</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-group">
+                            <label>Период создания</label>
+                            <div class="filter-date-range">
+                                <input type="date" id="search-filter-date-from" class="filter-input-date" title="Дата от" />
+                                <span class="filter-date-separator">—</span>
+                                <input type="date" id="search-filter-date-to" class="filter-input-date" title="Дата до" />
+                            </div>
+                        </div>
+
+                        <div class="filter-group">
+                            <div class="filter-label-with-value">
+                                <label for="search-filter-conf">Мин. уверенность (AI)</label>
+                                <span id="search-filter-conf-label" class="filter-val-badge">0%</span>
+                            </div>
+                            <input type="range" id="search-filter-conf" class="filter-range" min="0" max="100" value="0" step="5" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="search-results-meta">
+                    <span id="search-results-count" class="search-counter-badge">Введите запрос или нажмите «Найти»</span>
+                </div>
+
+                <div id="search-results-list" class="search-results-container">
+                    <div class="placeholder-box">
+                        <span class="placeholder-icon">🔍</span>
+                        <p>Введите поисковый запрос или настройте фильтры и нажмите кнопку «Найти»</p>
+                        <p class="text-muted">Поддерживается мгновенный полнотекстовый поиск по содержимому документов</p>
+                    </div>
                 </div>
             </div>
 

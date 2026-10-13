@@ -1,12 +1,22 @@
 """
 Скрипт для удобного запуска AI-сервиса.
 
-Вместо длинной команды:
-    uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-Можно просто:
-    python run.py
+Автоматически определяет наличие локального виртуального окружения (venv)
+и переключается на него, если скрипт запущен через глобальный Python.
 """
+
+import os
+import sys
+import subprocess
+
+# Автоматическое переключение на venv, если запущен глобальный Python
+script_dir = os.path.dirname(os.path.abspath(__file__))
+venv_python = os.path.join(script_dir, "venv", "Scripts", "python.exe")
+
+if sys.prefix == sys.base_prefix and os.path.exists(venv_python):
+    print(f"Используем виртуальное окружение: {venv_python}")
+    result = subprocess.run([venv_python, os.path.abspath(__file__)] + sys.argv[1:])
+    sys.exit(result.returncode)
 
 import uvicorn
 from app.config import settings
@@ -20,4 +30,3 @@ if __name__ == "__main__":
         port=settings.PORT,
         reload=False
     )
-

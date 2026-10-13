@@ -88,7 +88,10 @@ def validate_total_consistency(table: Optional[ExtractedTable], extracted_total:
     if not table or not table.summary or not extracted_total:
         return results
 
-    table_total = table.summary.calculated_total
+    if isinstance(table.summary, dict):
+        table_total = table.summary.get('calculated_total')
+    else:
+        table_total = getattr(table.summary, 'calculated_total', None)
     doc_total = _parse_float(extracted_total)
 
     if table_total is not None and doc_total is not None:
