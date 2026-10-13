@@ -96,6 +96,15 @@ function createWindow() {
             mainWindow.webContents.toggleDevTools();
         }
     });
+
+    // Блокируем открытие пустых белых окон при скачивании файлов через window.open
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        const { shell } = require('electron');
+        if (url.startsWith('https://') || (url.startsWith('http://') && !url.includes('localhost'))) {
+            shell.openExternal(url);
+        }
+        return { action: 'deny' };
+    });
 }
 
 /**

@@ -192,7 +192,8 @@ async def analyze_document(file: UploadFile = File(...)):
     # В удостоверениях личности (паспорт, водительское, СНИЛС, ИНН) таблиц не бывает,
     # а защитные сетки и рамки фото не должны ошибочно определяться как "Таблица товаров и услуг".
     NON_TABLE_DOC_TYPES = {
-        "PASSPORT_RF", "PASSPORT", "DRIVER_LICENSE", "SNILS", "INN", "CERTIFICATE"
+        "PASSPORT_RF", "PASSPORT", "PTS", "VEHICLE_PASSPORT", "VEHICLE_DOCUMENT",
+        "DRIVER_LICENSE", "SNILS", "INN", "CERTIFICATE", "APPLICATION"
     }
     extracted_tables = []
     if class_result.predicted_type not in NON_TABLE_DOC_TYPES:

@@ -32,6 +32,46 @@ const App = {
     },
 
     /**
+     * Скачивание файла без создания пустого окна в Electron.
+     */
+    async downloadFile(url, defaultFilename) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+
+            let filename = defaultFilename;
+            const disposition = response.headers.get('content-disposition');
+            if (disposition && disposition.includes('filename=')) {
+                const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (match && match[1]) {
+                    filename = match[1].replace(/['"]/g, '').trim();
+                }
+            }
+            a.download = filename || 'download.json';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+        } catch (err) {
+            console.error('Ошибка прямого скачивания файла:', err);
+            const a = document.createElement('a');
+            a.href = url;
+            if (defaultFilename) a.download = defaultFilename;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+    },
+
+    /**
      * Настройка навигации по вкладкам.
      */
     setupNavigation() {
@@ -389,14 +429,14 @@ const App = {
         const btnExportCsv = document.getElementById('btn-export-registry-csv');
         if (btnExportCsv) {
             btnExportCsv.addEventListener('click', () => {
-                window.open(ApiClient.getExportRegistryCsvUrl(), '_blank');
+                this.downloadFile(ApiClient.getExportRegistryCsvUrl(), 'registry_export.csv');
             });
         }
 
         const btnExportJson = document.getElementById('btn-export-registry-json');
         if (btnExportJson) {
             btnExportJson.addEventListener('click', () => {
-                window.open(ApiClient.getExportRegistryJsonUrl(), '_blank');
+                this.downloadFile(ApiClient.getExportRegistryJsonUrl(), 'registry_export.json');
             });
         }
 
@@ -502,7 +542,7 @@ const App = {
         if (dashExportCsv && !dashExportCsv.dataset.bound) {
             dashExportCsv.dataset.bound = 'true';
             dashExportCsv.addEventListener('click', () => {
-                window.open(ApiClient.getExportRegistryCsvUrl(), '_blank');
+                this.downloadFile(ApiClient.getExportRegistryCsvUrl(), 'registry_export.csv');
             });
         }
 
@@ -510,7 +550,7 @@ const App = {
         if (dashExportJson && !dashExportJson.dataset.bound) {
             dashExportJson.dataset.bound = 'true';
             dashExportJson.addEventListener('click', () => {
-                window.open(ApiClient.getExportRegistryJsonUrl(), '_blank');
+                this.downloadFile(ApiClient.getExportRegistryJsonUrl(), 'registry_export.json');
             });
         }
 
@@ -1096,7 +1136,7 @@ const App = {
         if (btnExportCsv) {
             btnExportCsv.addEventListener('click', () => {
                 if (this.currentAnalysisDocId) {
-                    window.open(ApiClient.getDocumentExportCsvUrl(this.currentAnalysisDocId), '_blank');
+                    this.downloadFile(ApiClient.getDocumentExportCsvUrl(this.currentAnalysisDocId), `document_${this.currentAnalysisDocId}_export.csv`);
                 }
             });
         }
@@ -1105,7 +1145,7 @@ const App = {
         if (btnExportJson) {
             btnExportJson.addEventListener('click', () => {
                 if (this.currentAnalysisDocId) {
-                    window.open(ApiClient.getDocumentExportJsonUrl(this.currentAnalysisDocId), '_blank');
+                    this.downloadFile(ApiClient.getDocumentExportJsonUrl(this.currentAnalysisDocId), `document_${this.currentAnalysisDocId}_export.json`);
                 }
             });
         }
