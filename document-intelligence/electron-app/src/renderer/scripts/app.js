@@ -631,9 +631,9 @@ const App = {
                 } else if (action === 'view') {
                     this.viewDocumentFile(id);
                 } else if (action === 'export-csv') {
-                    window.open(ApiClient.getDocumentExportCsvUrl(id), '_blank');
+                    this.downloadFile(ApiClient.getDocumentExportCsvUrl(id), `document_${id}_export.csv`);
                 } else if (action === 'export-json') {
-                    window.open(ApiClient.getDocumentExportJsonUrl(id), '_blank');
+                    this.downloadFile(ApiClient.getDocumentExportJsonUrl(id), `document_${id}_export.json`);
                 } else if (action === 'delete') {
                     this.confirmDeleteDocument(id);
                 }
@@ -780,10 +780,10 @@ const App = {
                             <button class="table-btn" onclick="App.openAnalysisModal(${doc.id})" title="Инспектор документа">
                                 <svg><use href="#icon-eye"></use></svg>
                             </button>
-                            <button class="table-btn" onclick="window.open(ApiClient.getDocumentExportCsvUrl(${doc.id}), '_blank')" title="Экспорт CSV">
+                            <button class="table-btn" onclick="App.downloadFile(ApiClient.getDocumentExportCsvUrl(${doc.id}), 'document_${doc.id}_export.csv')" title="Экспорт CSV">
                                 <svg><use href="#icon-download"></use></svg>
                             </button>
-                            <button class="table-btn" onclick="window.open(ApiClient.getDocumentExportJsonUrl(${doc.id}), '_blank')" title="Экспорт JSON">
+                            <button class="table-btn" onclick="App.downloadFile(ApiClient.getDocumentExportJsonUrl(${doc.id}), 'document_${doc.id}_export.json')" title="Экспорт JSON">
                                 <span style="font-size: 9px; font-weight: 700; font-family: var(--font-mono);">JSON</span>
                             </button>
                             <button class="table-btn danger" onclick="App.confirmDeleteDocument(${doc.id})" title="Удалить">
@@ -799,8 +799,7 @@ const App = {
     },
 
     viewDocumentFile(id) {
-        const fileUrl = ApiClient.getDocumentFileUrl(id);
-        window.open(fileUrl, '_blank');
+        this.openAnalysisModal(id);
     },
 
     async confirmDeleteDocument(id) {
