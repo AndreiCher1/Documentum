@@ -302,6 +302,61 @@ async def render_page_image(
         return Response(content=content, media_type=file.content_type or "image/png")
 
 
+@app.post("/experiments/run")
+async def run_experiments(quick_mode: bool = True):
+    """
+    Запуск стресс-тестирования моделей и расчёта метрик (CER, WER, F1, точность).
+    """
+    import sys
+    from pathlib import Path
+    exp_dir = Path(__file__).resolve().parent.parent.parent / "experiments"
+    if str(exp_dir) not in sys.path:
+        sys.path.insert(0, str(exp_dir))
+    from evaluation.benchmark_engine import benchmark_engine
+    try:
+        results = benchmark_engine.run_benchmark(quick_mode=quick_mode)
+        return results
+    except Exception as e:
+        logger.error(f"Ошибка выполнения эксперимента: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Ошибка бенчмарка: {str(e)}")
+
+
+@app.get("/experiments/latest")
+async def get_latest_experiments():
+    """
+    Получение результатов последнего сохранённого эксперимента.
+    """
+    import json
+    from pathlib import Path
+    res_path = Path(__file__).resolve().parent.parent.parent / "experiments" / "results" / "benchmark_results.json"
+    if not res_path.exists():
+        return {
+            "status": "not_run",
+            "summary": {
+                "mean_baseline_cer": 0.0,
+                "mean_enhanced_cer": 0.0,
+                "mean_baseline_wer": 0.0,
+                "mean_enhanced_wer": 0.0,
+                "mean_baseline_f1": 0.0,
+                "mean_enhanced_f1": 0.0,
+                "mean_baseline_accuracy": 0.0,
+                "mean_enhanced_accuracy": 0.0,
+                "mean_enhanced_latency_ms": 0.0,
+                "cer_reduction_pct": 0.0,
+                "f1_gain_pct": 0.0,
+                "total_tested_samples": 0,
+                "conditions_count": 0,
+                "timestamp": "Никогда"
+            },
+            "table": []
+        }
+    try:
+        with open(res_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка чтения результатов: {str(e)}")
+
+
 
 if __name__ == "__main__":
     import uvicorn

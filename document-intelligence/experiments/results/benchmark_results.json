@@ -1,0 +1,234 @@
+{
+  "summary": {
+    "mean_baseline_cer": 49.3,
+    "mean_enhanced_cer": 28.5,
+    "mean_baseline_wer": 61.4,
+    "mean_enhanced_wer": 36.8,
+    "mean_baseline_f1": 1.4,
+    "mean_enhanced_f1": 0.0,
+    "mean_baseline_accuracy": 50.0,
+    "mean_enhanced_accuracy": 50.0,
+    "mean_enhanced_latency_ms": 51280.0,
+    "cer_reduction_pct": 20.8,
+    "f1_gain_pct": -1.4,
+    "total_tested_samples": 2,
+    "conditions_count": 4,
+    "timestamp": "2026-10-13 20:26:43"
+  },
+  "table": [
+    {
+      "condition": "clean",
+      "condition_ru": "Оригинал (Clean)",
+      "baseline_cer": 9.3,
+      "enhanced_cer": 0.0,
+      "cer_reduction": 9.3,
+      "baseline_wer": 24.5,
+      "enhanced_wer": 0.0,
+      "baseline_f1": 5.5,
+      "enhanced_f1": 0.0,
+      "baseline_acc": 50.0,
+      "enhanced_acc": 50.0,
+      "baseline_latency_ms": 52721.2,
+      "enhanced_latency_ms": 49869.3
+    },
+    {
+      "condition": "rotation",
+      "condition_ru": "Перекос угла (Skew +12.5°)",
+      "baseline_cer": 77.4,
+      "enhanced_cer": 32.0,
+      "cer_reduction": 45.3,
+      "baseline_wer": 81.1,
+      "enhanced_wer": 40.5,
+      "baseline_f1": 0.0,
+      "enhanced_f1": 0.0,
+      "baseline_acc": 50.0,
+      "enhanced_acc": 50.0,
+      "baseline_latency_ms": 51948.5,
+      "enhanced_latency_ms": 58135.8
+    },
+    {
+      "condition": "gaussian_blur",
+      "condition_ru": "Размытие объектива (Defocus)",
+      "baseline_cer": 45.4,
+      "enhanced_cer": 43.4,
+      "cer_reduction": 2.0,
+      "baseline_wer": 64.3,
+      "enhanced_wer": 59.8,
+      "baseline_f1": 0.0,
+      "enhanced_f1": 0.0,
+      "baseline_acc": 50.0,
+      "enhanced_acc": 50.0,
+      "baseline_latency_ms": 47884.9,
+      "enhanced_latency_ms": 47688.5
+    },
+    {
+      "condition": "combined",
+      "condition_ru": "Комплексный стресс-тест",
+      "baseline_cer": 65.0,
+      "enhanced_cer": 38.6,
+      "cer_reduction": 26.4,
+      "baseline_wer": 75.6,
+      "enhanced_wer": 47.0,
+      "baseline_f1": 0.0,
+      "enhanced_f1": 0.0,
+      "baseline_acc": 50.0,
+      "enhanced_acc": 50.0,
+      "baseline_latency_ms": 47193.2,
+      "enhanced_latency_ms": 49426.4
+    }
+  ],
+  "details": [
+    {
+      "sample_id": "passport_rf",
+      "sample_name": "Паспорт гражданина РФ",
+      "condition": "clean",
+      "baseline": {
+        "cer": 0.83,
+        "wer": 8.0,
+        "f1": 0.0,
+        "latency_ms": 31033.9,
+        "detected_type": "PASSPORT_RF"
+      },
+      "enhanced": {
+        "cer": 0.0,
+        "wer": 0.0,
+        "f1": 0.0,
+        "latency_ms": 30783.8,
+        "detected_type": "PASSPORT_RF"
+      }
+    },
+    {
+      "sample_id": "passport_rf",
+      "sample_name": "Паспорт гражданина РФ",
+      "condition": "rotation",
+      "baseline": {
+        "cer": 88.15,
+        "wer": 86.0,
+        "f1": 0.0,
+        "latency_ms": 33569.7,
+        "detected_type": "PASSPORT_RF"
+      },
+      "enhanced": {
+        "cer": 50.96,
+        "wer": 52.0,
+        "f1": 0.0,
+        "latency_ms": 36172.8,
+        "detected_type": "PASSPORT_RF"
+      }
+    },
+    {
+      "sample_id": "passport_rf",
+      "sample_name": "Паспорт гражданина РФ",
+      "condition": "gaussian_blur",
+      "baseline": {
+        "cer": 72.45,
+        "wer": 80.0,
+        "f1": 0.0,
+        "latency_ms": 28907.0,
+        "detected_type": "PASSPORT_RF"
+      },
+      "enhanced": {
+        "cer": 71.35,
+        "wer": 80.0,
+        "f1": 0.0,
+        "latency_ms": 28326.7,
+        "detected_type": "PASSPORT_RF"
+      }
+    },
+    {
+      "sample_id": "passport_rf",
+      "sample_name": "Паспорт гражданина РФ",
+      "condition": "combined",
+      "baseline": {
+        "cer": 69.7,
+        "wer": 76.0,
+        "f1": 0.0,
+        "latency_ms": 28406.2,
+        "detected_type": "PASSPORT_RF"
+      },
+      "enhanced": {
+        "cer": 62.81,
+        "wer": 64.0,
+        "f1": 0.0,
+        "latency_ms": 30003.4,
+        "detected_type": "PASSPORT_RF"
+      }
+    },
+    {
+      "sample_id": "pts_auto",
+      "sample_name": "Паспорт транспортного средства (ПТС)",
+      "condition": "clean",
+      "baseline": {
+        "cer": 17.76,
+        "wer": 40.91,
+        "f1": 11.1,
+        "latency_ms": 74408.5,
+        "detected_type": "PTS"
+      },
+      "enhanced": {
+        "cer": 0.0,
+        "wer": 0.0,
+        "f1": 0.0,
+        "latency_ms": 68954.9,
+        "detected_type": "PTS"
+      }
+    },
+    {
+      "sample_id": "pts_auto",
+      "sample_name": "Паспорт транспортного средства (ПТС)",
+      "condition": "rotation",
+      "baseline": {
+        "cer": 66.6,
+        "wer": 76.22,
+        "f1": 0.0,
+        "latency_ms": 70327.4,
+        "detected_type": "PTS"
+      },
+      "enhanced": {
+        "cer": 13.11,
+        "wer": 29.02,
+        "f1": 0.0,
+        "latency_ms": 80098.9,
+        "detected_type": "PTS"
+      }
+    },
+    {
+      "sample_id": "pts_auto",
+      "sample_name": "Паспорт транспортного средства (ПТС)",
+      "condition": "gaussian_blur",
+      "baseline": {
+        "cer": 18.36,
+        "wer": 48.6,
+        "f1": 0.0,
+        "latency_ms": 66862.9,
+        "detected_type": "PTS"
+      },
+      "enhanced": {
+        "cer": 15.49,
+        "wer": 39.51,
+        "f1": 0.0,
+        "latency_ms": 67050.3,
+        "detected_type": "PTS"
+      }
+    },
+    {
+      "sample_id": "pts_auto",
+      "sample_name": "Паспорт транспортного средства (ПТС)",
+      "condition": "combined",
+      "baseline": {
+        "cer": 60.27,
+        "wer": 75.17,
+        "f1": 0.0,
+        "latency_ms": 65980.1,
+        "detected_type": "PTS"
+      },
+      "enhanced": {
+        "cer": 14.4,
+        "wer": 30.07,
+        "f1": 0.0,
+        "latency_ms": 68849.4,
+        "detected_type": "PTS"
+      }
+    }
+  ]
+}

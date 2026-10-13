@@ -25,3 +25,4 @@ public record DashboardStatsResponse(
             double percentage
     ) {}
 }
+

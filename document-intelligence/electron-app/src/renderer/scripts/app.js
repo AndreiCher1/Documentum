@@ -23,6 +23,7 @@ const App = {
         this.setupDocumentsPage();
         this.setupAnalysisModal();
         this.setupSearchPage();
+        this.setupExperimentsPage();
         this.setupSettings();
 
         // Проверяем доступность сервисов и загружаем статистику
@@ -66,6 +67,8 @@ const App = {
             this.loadDashboardData();
         } else if (pageName === 'search') {
             this.performSearch();
+        } else if (pageName === 'experiments') {
+            this.loadExperimentsData();
         }
     },
 
@@ -682,6 +685,106 @@ const App = {
                     this.checkHealth();
                 }
             });
+        }
+    },
+
+    /**
+     * === Эксперименты и Оценка моделей (Этап 12) ===
+     */
+    setupExperimentsPage() {
+        const btnRun = document.getElementById('btn-run-experiments');
+        if (btnRun) {
+            btnRun.addEventListener('click', () => {
+                const selectMode = document.getElementById('experiments-mode-select');
+                const quickMode = selectMode ? selectMode.value === 'true' : true;
+                this.executeExperimentsBenchmark(quickMode);
+            });
+        }
+    },
+
+    async loadExperimentsData() {
+        try {
+            const data = await ApiClient.getLatestExperiments();
+            if (data && data.summary) {
+                this.renderExperimentsReport(data);
+            }
+        } catch (e) {
+            console.warn('Не удалось загрузить последние результаты экспериментов:', e.message);
+        }
+    },
+
+    async executeExperimentsBenchmark(quickMode = true) {
+        const btnRun = document.getElementById('btn-run-experiments');
+        const progressBox = document.getElementById('experiments-progress-box');
+
+        if (btnRun) {
+            btnRun.disabled = true;
+            btnRun.textContent = '⏳ Выполняется стресс-тест...';
+        }
+        if (progressBox) progressBox.style.display = 'block';
+
+        try {
+            const report = await ApiClient.runExperiments(quickMode);
+            this.renderExperimentsReport(report);
+        } catch (error) {
+            alert('Ошибка при выполнении эксперимента:\n' + error.message);
+        } finally {
+            if (btnRun) {
+                btnRun.disabled = false;
+                btnRun.textContent = '🚀 Запустить бенчмарк';
+            }
+            if (progressBox) progressBox.style.display = 'none';
+        }
+    },
+
+    renderExperimentsReport(data) {
+        if (!data || !data.summary) return;
+
+        const s = data.summary;
+        const cerVal = document.getElementById('exp-cer-value');
+        const cerSub = document.getElementById('exp-cer-sub');
+        const werVal = document.getElementById('exp-wer-value');
+        const werSub = document.getElementById('exp-wer-sub');
+        const f1Val = document.getElementById('exp-f1-value');
+        const f1Sub = document.getElementById('exp-f1-sub');
+        const accVal = document.getElementById('exp-acc-value');
+        const timeSub = document.getElementById('exp-time-sub');
+        const timeEl = document.getElementById('experiments-timestamp');
+        const tbody = document.getElementById('experiments-table-body');
+
+        if (cerVal) cerVal.textContent = (s.mean_enhanced_cer !== undefined ? s.mean_enhanced_cer : '—') + '%';
+        if (cerSub) cerSub.textContent = `Без OpenCV: ${s.mean_baseline_cer || 0}% (снижение на -${s.cer_reduction_pct || 0}%)`;
+
+        if (werVal) werVal.textContent = (s.mean_enhanced_wer !== undefined ? s.mean_enhanced_wer : '—') + '%';
+        if (werSub) werSub.textContent = `Без OpenCV: ${s.mean_baseline_wer || 0}%`;
+
+        if (f1Val) f1Val.textContent = (s.mean_enhanced_f1 !== undefined ? s.mean_enhanced_f1 : '—') + '%';
+        if (f1Sub) f1Sub.textContent = `Прирост точности: +${s.f1_gain_pct || 0}% (было ${s.mean_baseline_f1 || 0}%)`;
+
+        if (accVal) accVal.textContent = (s.mean_enhanced_accuracy !== undefined ? s.mean_enhanced_accuracy : '—') + '%';
+        if (timeSub) timeSub.textContent = `Инференс CPU: ~${s.mean_enhanced_latency_ms || 0} мс`;
+
+        if (timeEl) timeEl.textContent = `Дата запуска: ${s.timestamp || '—'} (исследовано ${s.conditions_count || 0} искажений)`;
+
+        if (tbody && data.table && data.table.length > 0) {
+            tbody.innerHTML = data.table.map(row => {
+                const reduction = row.cer_reduction > 0
+                    ? `<span class="status-badge healthy">-${row.cer_reduction}%</span>`
+                    : `<span class="status-badge unavailable">0%</span>`;
+
+                return `
+                    <tr>
+                        <td><strong>${this.escapeHtml(row.condition_ru || row.condition)}</strong></td>
+                        <td style="color: var(--error);">${row.baseline_cer}%</td>
+                        <td style="color: var(--success); font-weight: 700;">${row.enhanced_cer}%</td>
+                        <td>${reduction}</td>
+                        <td>${row.baseline_f1}%</td>
+                        <td style="color: var(--accent); font-weight: 700;">${row.enhanced_f1}%</td>
+                        <td><span class="status-badge ${row.enhanced_acc >= 80 ? 'healthy' : 'warning'}">${row.enhanced_acc}%</span></td>
+                        <td>${row.enhanced_latency_ms} мс</td>
+                    </tr>
+                `;
+            }).join('');
         }
     },
 

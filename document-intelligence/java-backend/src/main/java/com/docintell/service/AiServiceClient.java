@@ -152,4 +152,31 @@ public class AiServiceClient {
             throw new RuntimeException("Не удалось отрендерить страницу: " + e.getMessage(), e);
         }
     }
+
+    /**
+     * Получить результаты последнего эксперимента/бенчмарка.
+     */
+    public String getLatestExperiments() {
+        try {
+            return restTemplate.getForObject(aiServiceUrl + "/experiments/latest", String.class);
+        } catch (Exception e) {
+            logger.warn("Не удалось получить результаты экспериментов: {}", e.getMessage());
+            return "{\"status\": \"not_run\", \"summary\": null, \"table\": []}";
+        }
+    }
+
+    /**
+     * Запустить стресс-тестирование и бенчмарк моделей.
+     */
+    public String runExperiments(boolean quickMode) {
+        try {
+            String url = aiServiceUrl + "/experiments/run?quick_mode=" + quickMode;
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            org.springframework.http.HttpEntity<Void> entity = new org.springframework.http.HttpEntity<>(headers);
+            return restTemplate.postForObject(url, entity, String.class);
+        } catch (Exception e) {
+            logger.error("Ошибка запуска эксперимента: {}", e.getMessage());
+            throw new RuntimeException("Не удалось запустить эксперимент: " + e.getMessage(), e);
+        }
+    }
 }

@@ -49,6 +49,10 @@
                     <span class="nav-icon">🔍</span>
                     <span class="nav-text">Поиск</span>
                 </li>
+                <li class="nav-item" data-page="experiments">
+                    <span class="nav-icon">🔬</span>
+                    <span class="nav-text">Эксперименты</span>
+                </li>
                 <li class="nav-item" data-page="settings">
                     <span class="nav-icon">⚙️</span>
                     <span class="nav-text">Настройки</span>
@@ -335,6 +339,128 @@
                         <span class="placeholder-icon">🔍</span>
                         <p>Введите поисковый запрос или настройте фильтры и нажмите кнопку «Найти»</p>
                         <p class="text-muted">Поддерживается мгновенный полнотекстовый поиск по содержимому документов</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Experiments (Этап 12) -->
+            <div id="page-experiments" class="page">
+                <div class="page-header-row">
+                    <div>
+                        <h2>Эксперименты и Оценка моделей</h2>
+                        <p class="subtitle">Стресс-тестирование OCR-пайплайна, генерация искажений реального мира и расчёт метрик качества</p>
+                    </div>
+                    <div class="page-header-actions" style="display: flex; gap: 10px; align-items: center;">
+                        <select id="experiments-mode-select" class="filter-select" style="min-width: 170px;">
+                            <option value="true">⚡ Быстрый тест (Quick)</option>
+                            <option value="false">🔬 Полный стресс-тест</option>
+                        </select>
+                        <button class="btn btn-primary" id="btn-run-experiments">
+                            🚀 Запустить бенчмарк
+                        </button>
+                    </div>
+                </div>
+
+                <div id="experiments-progress-box" class="alert-box" style="display: none; background: rgba(79, 195, 247, 0.1); border-color: var(--accent);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.4em;">⚙️</span>
+                        <div>
+                            <strong>Выполняется стресс-тестирование моделей...</strong>
+                            <div class="text-muted" style="font-size: 0.85em;">Генерация синтетических искажений (размытие, перекос, шум) и замер CER/WER на CPU. Это может занять от 10 до 30 секунд.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI карточки экспериментов -->
+                <div class="kpi-cards-grid" id="experiments-kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📉</div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Средний CER (Посимвольно)</span>
+                            <span class="kpi-value" id="exp-cer-value">—</span>
+                            <span class="kpi-sub" id="exp-cer-sub">Без OpenCV: —</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📝</div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Средний WER (Пословно)</span>
+                            <span class="kpi-value" id="exp-wer-value">—</span>
+                            <span class="kpi-sub" id="exp-wer-sub">Без OpenCV: —</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">🎯</div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">F1-Score извлечения полей</span>
+                            <span class="kpi-value" id="exp-f1-value">—</span>
+                            <span class="kpi-sub" id="exp-f1-sub">Прирост точности: —</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">🏷️</div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Точность классификатора</span>
+                            <span class="kpi-value" id="exp-acc-value">—</span>
+                            <span class="kpi-sub" id="exp-time-sub">Инференс: — мс</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Таблица стресс-теста -->
+                <div class="dashboard-section">
+                    <div class="section-header-row">
+                        <h3>Матрица устойчивости к искажениям (Robustness Matrix)</h3>
+                        <span class="text-muted" id="experiments-timestamp">Тестирование ещё не запускалось</span>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="experiments-table">
+                            <thead>
+                                <tr>
+                                    <th>Искажение / Артефакт</th>
+                                    <th>CER (Базовый)</th>
+                                    <th>CER (OpenCV)</th>
+                                    <th>Снижение CER</th>
+                                    <th>F1 Полей (Базовый)</th>
+                                    <th>F1 Полей (OpenCV)</th>
+                                    <th>Точность типа</th>
+                                    <th>Время (CPU)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="experiments-table-body">
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted">Нажмите «🚀 Запустить бенчмарк», чтобы рассчитать метрики на реальных документах</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Исследовательские выводы -->
+                <div class="dashboard-section" style="margin-top: 24px;">
+                    <h3>Анализ алгоритмических эффектов</h3>
+                    <div class="features-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 12px;">
+                        <div class="status-card">
+                            <div class="status-icon">📐</div>
+                            <div class="status-info">
+                                <h3>Выравнивание перекоса (Deskew)</h3>
+                                <p class="text-muted" style="font-size: 0.82em; margin-top: 4px;">При наклоне документа на 12.5° базовый детектор строк теряет фрагменты текста. Предобработка Радона компенсирует угол до 0°, восстанавливая чтение.</p>
+                            </div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-icon">🔍</div>
+                            <div class="status-info">
+                                <h3>Адаптивный контраст (CLAHE)</h3>
+                                <p class="text-muted" style="font-size: 0.82em; margin-top: 4px;">Устраняет неравномерные тени от смартфона и выравнивает гистограмму освещенности, предотвращая слияние букв с фоном.</p>
+                            </div>
+                        </div>
+                        <div class="status-card">
+                            <div class="status-icon">📖</div>
+                            <div class="status-info">
+                                <h3>Словарная и пунктуационная постобработка</h3>
+                                <p class="text-muted" style="font-size: 0.82em; margin-top: 4px;">Восстанавливает пропущенные нейросетью запятые в рублёвых суммах (162,72 руб.), дефисы в сериях и додумывает неполные русские слова.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -271,6 +271,40 @@ const ApiClient = {
     },
 
     /**
+     * Получение результатов последнего эксперимента/бенчмарка (GET /api/experiments/latest).
+     */
+    async getLatestExperiments() {
+        const response = await fetch(`${this.baseUrl}/api/experiments/latest`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ошибка получения результатов экспериментов (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
+     * Запуск стресс-тестирования моделей (POST /api/experiments/run).
+     * @param {boolean} quickMode — быстрый или полный бенчмарк
+     */
+    async runExperiments(quickMode = true) {
+        const response = await fetch(`${this.baseUrl}/api/experiments/run?quickMode=${quickMode}`, {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.message || `Ошибка запуска эксперимента (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
      * Обновить базовый URL.
      * @param {string} url — новый URL
      */
