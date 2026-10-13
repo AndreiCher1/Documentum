@@ -54,6 +54,7 @@ if "%HEALTHY%"=="1" (
 :: 4. Запуск Electron UI
 echo [3/3] Открытие интерфейса Electron...
 cd /d "%ELECTRON_DIR%"
+set ELECTRON_RUN_AS_NODE=
 npm start
 
 echo.
