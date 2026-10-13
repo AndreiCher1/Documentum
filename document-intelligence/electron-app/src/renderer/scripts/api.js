@@ -227,6 +227,50 @@ const ApiClient = {
     },
 
     /**
+     * Получить сводную статистику системы для Dashboard (GET /api/analytics/dashboard).
+     */
+    async getDashboardStats() {
+        const response = await fetch(`${this.baseUrl}/api/analytics/dashboard`, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ошибка получения аналитики (${response.status})`);
+        }
+
+        return await response.json();
+    },
+
+    /**
+     * URL для скачивания всего реестра в формате Excel CSV (UTF-8 BOM).
+     */
+    getExportRegistryCsvUrl() {
+        return `${this.baseUrl}/api/documents/export/csv`;
+    },
+
+    /**
+     * URL для скачивания всего реестра в JSON.
+     */
+    getExportRegistryJsonUrl() {
+        return `${this.baseUrl}/api/documents/export/json`;
+    },
+
+    /**
+     * URL для скачивания реквизитов документа в CSV.
+     */
+    getDocumentExportCsvUrl(id) {
+        return `${this.baseUrl}/api/documents/${id}/export/csv`;
+    },
+
+    /**
+     * URL для скачивания документа в JSON.
+     */
+    getDocumentExportJsonUrl(id) {
+        return `${this.baseUrl}/api/documents/${id}/export/json`;
+    },
+
+    /**
      * Обновить базовый URL.
      * @param {string} url — новый URL
      */

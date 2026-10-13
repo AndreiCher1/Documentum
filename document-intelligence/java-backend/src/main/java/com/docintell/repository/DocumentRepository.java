@@ -78,5 +78,17 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      * Поиск документов за период дат.
      */
     List<Document> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    /**
+     * Суммарный объем всех файлов в хранилище (в байтах).
+     */
+    @Query("SELECT COALESCE(SUM(d.fileSize), 0) FROM Document d")
+    Long calculateTotalFileSize();
+
+    /**
+     * Группировка и подсчет документов по категориям.
+     */
+    @Query("SELECT d.documentType, COUNT(d) FROM Document d GROUP BY d.documentType")
+    List<Object[]> countGroupedByDocumentType();
 }
 

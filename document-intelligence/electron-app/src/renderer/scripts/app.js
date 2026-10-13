@@ -10,6 +10,8 @@
 
 const App = {
     selectedFile: null,
+    uploadQueue: [],
+    isUploadingBatch: false,
 
     init() {
         console.log('Document Intelligence UI запущен');
@@ -144,14 +146,14 @@ const App = {
     },
 
     /**
-     * Настройка страницы загрузки документов (Drag-and-Drop + File Input).
+     * Настройка страницы загрузки документов (Drag-and-Drop + Пакетная очередь).
      */
     setupFileUpload() {
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const btnBrowse = document.getElementById('btn-browse-file');
-        const btnUpload = document.getElementById('btn-start-upload');
-        const btnCancel = document.getElementById('btn-cancel-file');
+        const btnBatchUpload = document.getElementById('btn-batch-upload-all');
+        const btnBatchClear = document.getElementById('btn-batch-clear-all');
 
         if (!dropZone || !fileInput) return;
 
@@ -167,7 +169,8 @@ const App = {
 
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
-                this.handleFileSelected(e.target.files[0]);
+                this.handleFilesAdded(Array.from(e.target.files));
+                fileInput.value = ''; // сброс для повторного выбора тех же файлов
             }
         });
 
@@ -191,87 +194,186 @@ const App = {
         dropZone.addEventListener('drop', (e) => {
             const dt = e.dataTransfer;
             if (dt.files && dt.files.length > 0) {
-                this.handleFileSelected(dt.files[0]);
+                this.handleFilesAdded(Array.from(dt.files));
             }
         });
 
-        // Отмена выбранного файла
-        btnCancel.addEventListener('click', () => {
-            this.clearSelectedFile();
-        });
-
-        // Кнопка отправки на сервер
-        btnUpload.addEventListener('click', () => {
-            this.uploadSelectedFile();
-        });
-    },
-
-    handleFileSelected(file) {
-        this.selectedFile = file;
-
-        const card = document.getElementById('selected-file-card');
-        const nameEl = document.getElementById('selected-file-name');
-        const sizeEl = document.getElementById('selected-file-size');
-        const statusEl = document.getElementById('upload-status');
-
-        if (nameEl) nameEl.textContent = file.name;
-        if (sizeEl) sizeEl.textContent = this.formatFileSize(file.size);
-        if (card) card.style.display = 'flex';
-        if (statusEl) statusEl.style.display = 'none';
-    },
-
-    clearSelectedFile() {
-        this.selectedFile = null;
-        const fileInput = document.getElementById('file-input');
-        if (fileInput) fileInput.value = '';
-
-        const card = document.getElementById('selected-file-card');
-        if (card) card.style.display = 'none';
-
-        const statusEl = document.getElementById('upload-status');
-        if (statusEl) statusEl.style.display = 'none';
-    },
-
-    async uploadSelectedFile() {
-        if (!this.selectedFile) return;
-
-        const btnUpload = document.getElementById('btn-start-upload');
-        const statusEl = document.getElementById('upload-status');
-
-        if (btnUpload) {
-            btnUpload.disabled = true;
-            btnUpload.textContent = '⏳ Отправка...';
+        if (btnBatchClear) {
+            btnBatchClear.addEventListener('click', () => this.clearBatchQueue());
         }
 
-        try {
-            const result = await ApiClient.uploadDocument(this.selectedFile);
-
-            if (statusEl) {
-                statusEl.style.display = 'block';
-                statusEl.className = 'alert-box success';
-                statusEl.innerHTML = `✅ Документ успешно загружен! <br><strong>ID:</strong> #${result.id} | <strong>Имя:</strong> ${result.originalFilename} | <strong>Статус:</strong> ${result.status}`;
-            }
-
-            // Очищаем выбранный файл через небольшую паузу
-            setTimeout(() => {
-                this.clearSelectedFile();
-                this.loadDashboardData();
-            }, 2500);
-
-        } catch (error) {
-            if (statusEl) {
-                statusEl.style.display = 'block';
-                statusEl.className = 'alert-box error';
-                statusEl.innerHTML = `❌ Ошибка при загрузке файла: <br>${error.message}`;
-            }
-        } finally {
-            if (btnUpload) {
-                btnUpload.disabled = false;
-                btnUpload.textContent = '🚀 Отправить на сервер';
-            }
+        if (btnBatchUpload) {
+            btnBatchUpload.addEventListener('click', () => this.startBatchUpload());
         }
     },
 
+    handleFilesAdded(files) {
+        if (!files || files.length === 0) return;
+
+        files.forEach(file => {
+            // Предотвращаем дублирование по имени и размеру в очереди
+            const exists = this.uploadQueue.some(item => item.file.name === file.name && item.file.size === file.size);
+            if (!exists) {
+                this.uploadQueue.push({
+                    id: 'queue_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+                    file: file,
+                    status: 'pending', // pending, uploading, completed, failed
+                    error: null,
+                    result: null
+                });
+            }
+        });
+
+        this.renderBatchQueue();
+    },
+
+    removeQueueItem(queueId) {
+        if (this.isUploadingBatch) return;
+        this.uploadQueue = this.uploadQueue.filter(item => item.id !== queueId);
+        this.renderBatchQueue();
+    },
+
+    clearBatchQueue() {
+        if (this.isUploadingBatch) return;
+        this.uploadQueue = [];
+        this.renderBatchQueue();
+        const statusEl = document.getElementById('upload-status');
+        if (statusEl) statusEl.style.display = 'none';
+        const overallProgress = document.getElementById('batch-overall-progress');
+        if (overallProgress) overallProgress.style.display = 'none';
+    },
+
+    renderBatchQueue() {
+        const container = document.getElementById('batch-upload-container');
+        const countEl = document.getElementById('batch-file-count');
+        const btnCountEl = document.getElementById('batch-upload-btn-count');
+        const sizeEl = document.getElementById('batch-total-size');
+        const listEl = document.getElementById('batch-files-list');
+
+        if (!container || !listEl) return;
+
+        if (this.uploadQueue.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+
+        const totalBytes = this.uploadQueue.reduce((acc, item) => acc + item.file.size, 0);
+        const pendingCount = this.uploadQueue.filter(item => item.status === 'pending').length;
+
+        if (countEl) countEl.textContent = this.uploadQueue.length;
+        if (btnCountEl) btnCountEl.textContent = pendingCount;
+        if (sizeEl) sizeEl.textContent = 'Общий объём: ' + this.formatFileSize(totalBytes);
+
+        listEl.innerHTML = this.uploadQueue.map(item => {
+            let statusBadge = '';
+            if (item.status === 'pending') {
+                statusBadge = '<span class="status-badge checking">В очереди</span>';
+            } else if (item.status === 'uploading') {
+                statusBadge = '<span class="status-badge checking">⏳ Загрузка...</span>';
+            } else if (item.status === 'completed') {
+                statusBadge = `<span class="status-badge healthy">Загружен ✓ (#${item.result ? item.result.id : ''})</span>`;
+            } else if (item.status === 'failed') {
+                statusBadge = `<span class="status-badge error" title="${this.escapeHtml(item.error || '')}">Ошибка ✗</span>`;
+            }
+
+            const icon = item.file.name.toLowerCase().endsWith('.pdf') ? '📕' : '🖼️';
+
+            return `
+                <div class="batch-file-item ${item.status}" id="queue-item-${item.id}">
+                    <div class="batch-file-main">
+                        <span class="batch-file-icon">${icon}</span>
+                        <div class="batch-file-meta-col">
+                            <span class="batch-file-name" title="${this.escapeHtml(item.file.name)}">${this.escapeHtml(item.file.name)}</span>
+                            <span class="batch-file-sub">${this.formatFileSize(item.file.size)}</span>
+                        </div>
+                    </div>
+                    <div class="batch-file-actions">
+                        ${statusBadge}
+                        ${item.status === 'pending' && !this.isUploadingBatch ? `
+                            <button class="btn-remove-batch-item" onclick="App.removeQueueItem('${item.id}')" title="Удалить из очереди">&times;</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    },
+
+    async startBatchUpload() {
+        if (this.isUploadingBatch) return;
+
+        const pendingItems = this.uploadQueue.filter(item => item.status === 'pending');
+        if (pendingItems.length === 0) {
+            alert('Все файлы в очереди уже загружены или очередь пуста!');
+            return;
+        }
+
+        this.isUploadingBatch = true;
+
+        const btnBatchUpload = document.getElementById('btn-batch-upload-all');
+        const btnBatchClear = document.getElementById('btn-batch-clear-all');
+        const progressWrapper = document.getElementById('batch-overall-progress');
+        const progressFill = document.getElementById('batch-progress-fill');
+        const progressText = document.getElementById('batch-progress-text');
+        const progressPercent = document.getElementById('batch-progress-percent');
+        const statusEl = document.getElementById('upload-status');
+
+        if (btnBatchUpload) btnBatchUpload.disabled = true;
+        if (btnBatchClear) btnBatchClear.disabled = true;
+        if (progressWrapper) progressWrapper.style.display = 'block';
+
+        let completedSuccess = 0;
+        let failedCount = 0;
+        const totalToUpload = pendingItems.length;
+
+        for (let i = 0; i < totalToUpload; i++) {
+            const item = pendingItems[i];
+            item.status = 'uploading';
+            this.renderBatchQueue();
+
+            const currentIdx = i + 1;
+            const pct = Math.round((i / totalToUpload) * 100);
+            if (progressFill) progressFill.style.width = pct + '%';
+            if (progressPercent) progressPercent.textContent = pct + '%';
+            if (progressText) progressText.textContent = `Загрузка файла ${currentIdx} из ${totalToUpload}: ${item.file.name}...`;
+
+            try {
+                const result = await ApiClient.uploadDocument(item.file);
+                item.status = 'completed';
+                item.result = result;
+                completedSuccess++;
+            } catch (err) {
+                console.error(`Ошибка загрузки ${item.file.name}:`, err);
+                item.status = 'failed';
+                item.error = err.message || 'Ошибка сети';
+                failedCount++;
+            }
+
+            this.renderBatchQueue();
+        }
+
+        if (progressFill) progressFill.style.width = '100%';
+        if (progressPercent) progressPercent.textContent = '100%';
+        if (progressText) progressText.textContent = `Завершено! Успешно: ${completedSuccess}, Ошибок: ${failedCount}`;
+
+        if (statusEl) {
+            statusEl.style.display = 'block';
+            statusEl.className = 'alert-box ' + (failedCount === 0 ? 'success' : 'warning');
+            statusEl.innerHTML = `Пакетная загрузка завершена. Загружено документов: <strong>${completedSuccess}</strong>${failedCount > 0 ? `, ошибок: <strong>${failedCount}</strong>` : ''}. <a href="#" style="color: var(--accent); margin-left: 10px;" onclick="App.navigateTo('documents'); return false;">Перейти в Реестр документов →</a>`;
+        }
+
+        this.isUploadingBatch = false;
+        if (btnBatchUpload) btnBatchUpload.disabled = false;
+        if (btnBatchClear) btnBatchClear.disabled = false;
+
+        // Обновляем статистику Dashboard
+        this.loadDashboardData();
+    },
+
+    /**
+     * Настройка вкладки "Документы" и загрузка реестра.
+     */
     /**
      * Настройка вкладки "Документы" и загрузка реестра.
      */
@@ -279,6 +381,20 @@ const App = {
         const btnRefresh = document.getElementById('btn-refresh-docs');
         if (btnRefresh) {
             btnRefresh.addEventListener('click', () => this.loadDocuments());
+        }
+
+        const btnExportCsv = document.getElementById('btn-export-registry-csv');
+        if (btnExportCsv) {
+            btnExportCsv.addEventListener('click', () => {
+                window.open(ApiClient.getExportRegistryCsvUrl(), '_blank');
+            });
+        }
+
+        const btnExportJson = document.getElementById('btn-export-registry-json');
+        if (btnExportJson) {
+            btnExportJson.addEventListener('click', () => {
+                window.open(ApiClient.getExportRegistryJsonUrl(), '_blank');
+            });
         }
 
         const tbody = document.getElementById('documents-table-body');
@@ -295,6 +411,10 @@ const App = {
                     this.openAnalysisModal(id);
                 } else if (action === 'view') {
                     this.viewDocumentFile(id);
+                } else if (action === 'export-csv') {
+                    window.open(ApiClient.getDocumentExportCsvUrl(id), '_blank');
+                } else if (action === 'export-json') {
+                    window.open(ApiClient.getDocumentExportJsonUrl(id), '_blank');
                 } else if (action === 'delete') {
                     this.confirmDeleteDocument(id);
                 }
@@ -328,8 +448,10 @@ const App = {
                     <td>${this.formatDate(doc.createdAt)}</td>
                     <td>
                         <button class="btn btn-primary btn-sm" data-action="analyze" data-id="${doc.id}">⚡ Анализ</button>
-                        <button class="btn btn-secondary btn-sm" data-action="view" data-id="${doc.id}">👁️ Скан</button>
-                        <button class="btn btn-danger btn-sm" data-action="delete" data-id="${doc.id}">🗑️</button>
+                        <button class="btn btn-secondary btn-sm" data-action="view" data-id="${doc.id}" title="Просмотреть скан">👁️</button>
+                        <button class="btn btn-secondary btn-sm" data-action="export-csv" data-id="${doc.id}" title="Скачать распознанные поля в CSV">📊</button>
+                        <button class="btn btn-secondary btn-sm" data-action="export-json" data-id="${doc.id}" title="Скачать структуру документа в JSON">📦</button>
+                        <button class="btn btn-danger btn-sm" data-action="delete" data-id="${doc.id}" title="Удалить документ">🗑️</button>
                     </td>
                 </tr>
             `).join('');
@@ -359,23 +481,129 @@ const App = {
     },
 
     /**
-     * Загрузка данных для Dashboard.
+     * Загрузка сводных данных и аналитики для Dashboard.
      */
     async loadDashboardData() {
         const countEl = document.getElementById('dashboard-total-count');
+        const sizeEl = document.getElementById('dashboard-total-size');
+        const confEl = document.getElementById('dashboard-avg-confidence');
+        const rateEl = document.getElementById('dashboard-success-rate');
+        const pillsEl = document.getElementById('dashboard-status-pills');
+        const successSubEl = document.getElementById('dashboard-success-sub');
+        const catContainer = document.getElementById('dashboard-categories-container');
+        const catMeta = document.getElementById('dashboard-categories-meta');
         const recentContainer = document.getElementById('dashboard-recent-list');
 
-        try {
-            const recentDocs = await ApiClient.getRecentDocuments(5);
-            const totalCount = recentDocs.length; // в полностраничном API будет totalElements
+        // Подключение кнопок экспорта на Dashboard
+        const dashExportCsv = document.getElementById('btn-dashboard-export-csv');
+        if (dashExportCsv && !dashExportCsv.dataset.bound) {
+            dashExportCsv.dataset.bound = 'true';
+            dashExportCsv.addEventListener('click', () => {
+                window.open(ApiClient.getExportRegistryCsvUrl(), '_blank');
+            });
+        }
 
-            if (countEl) {
-                // Запрашиваем полный список для точного количества
-                const fullList = await ApiClient.getDocuments(0, 1);
-                countEl.textContent = fullList.totalElements !== undefined ? fullList.totalElements : recentDocs.length;
+        const dashExportJson = document.getElementById('btn-dashboard-export-json');
+        if (dashExportJson && !dashExportJson.dataset.bound) {
+            dashExportJson.dataset.bound = 'true';
+            dashExportJson.addEventListener('click', () => {
+                window.open(ApiClient.getExportRegistryJsonUrl(), '_blank');
+            });
+        }
+
+        try {
+            const stats = await ApiClient.getDashboardStats();
+
+            if (countEl) countEl.textContent = stats.totalDocuments || 0;
+            if (sizeEl) sizeEl.textContent = this.formatFileSize(stats.totalFileSizeBytes || 0);
+            if (confEl) confEl.textContent = (stats.averageConfidence !== undefined ? stats.averageConfidence : 0) + '%';
+            if (rateEl) rateEl.textContent = (stats.successRate !== undefined ? stats.successRate : 0) + '%';
+            if (pillsEl) {
+                pillsEl.textContent = `${stats.completedCount || 0} готово • ${(stats.processingCount || 0) + (stats.uploadedCount || 0)} в работе`;
+            }
+            if (successSubEl) {
+                successSubEl.textContent = `${stats.completedCount || 0} из ${stats.totalDocuments || 0} без сбоев`;
             }
 
+            // Рендер распределения документов по категориям
+            if (catContainer) {
+                const categories = stats.categories || {};
+                const catEntries = Object.entries(categories);
+
+                if (catEntries.length === 0 || stats.totalDocuments === 0) {
+                    catContainer.innerHTML = `<p class="text-muted">Категории пока не сформированы. Загрузите и проанализируйте документы.</p>`;
+                    if (catMeta) catMeta.textContent = '0 типов';
+                } else {
+                    if (catMeta) catMeta.textContent = `${catEntries.length} типов определено`;
+                    catEntries.sort((a, b) => {
+                        const cntA = typeof a[1] === 'object' ? (a[1].count || 0) : (a[1] || 0);
+                        const cntB = typeof b[1] === 'object' ? (b[1].count || 0) : (b[1] || 0);
+                        return cntB - cntA;
+                    });
+
+                    const categoryIcons = {
+                        'PASSPORT': '🪪',
+                        'PASSPORT_RF': '🪪',
+                        'PTS': '🚗',
+                        'RECEIPT': '🧾',
+                        'INVOICE': '💳',
+                        'CONTRACT': '📜',
+                        'ACT': '📝',
+                        'WAYBILL': '📦',
+                        'TAX_2NDFL': '💼',
+                        'CERTIFICATE': '📑',
+                        'UNKNOWN': '❓'
+                    };
+
+                    const categoryNames = {
+                        'PASSPORT': 'Паспорт РФ',
+                        'PASSPORT_RF': 'Паспорт РФ',
+                        'PTS': 'Паспорт ТС (ПТС)',
+                        'RECEIPT': 'Квитанция / ЖКУ',
+                        'INVOICE': 'Счёт на оплату',
+                        'CONTRACT': 'Договор',
+                        'ACT': 'Акт выполненных работ',
+                        'WAYBILL': 'Накладная',
+                        'TAX_2NDFL': 'Справка 2-НДФЛ',
+                        'CERTIFICATE': 'Свидетельство / Справка',
+                        'UNKNOWN': 'Не определён'
+                    };
+
+                    const totalDocs = Math.max(stats.totalDocuments, 1);
+
+                    catContainer.innerHTML = catEntries.map(([typeKey, catData]) => {
+                        const count = typeof catData === 'object' ? (catData.count || 0) : (catData || 0);
+                        const percent = typeof catData === 'object' && catData.percentage !== undefined
+                            ? Math.round(catData.percentage)
+                            : Math.round((count / totalDocs) * 100);
+                        const icon = categoryIcons[typeKey] || '📄';
+                        const name = (typeof catData === 'object' && catData.displayName && !catData.displayName.includes(''))
+                            ? catData.displayName
+                            : (categoryNames[typeKey] || typeKey);
+
+                        return `
+                            <div class="cat-dist-row">
+                                <div class="cat-dist-info">
+                                    <span class="cat-dist-name">
+                                        <span>${icon}</span>
+                                        <span>${name}</span>
+                                    </span>
+                                    <span class="cat-dist-stats">
+                                        <strong>${count}</strong> шт. (${percent}%)
+                                    </span>
+                                </div>
+                                <div class="cat-dist-track">
+                                    <div class="cat-dist-fill" style="width: ${percent}%;"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            // Последние документы
             if (recentContainer) {
+                const recentDocs = stats.recentDocuments || [];
                 if (recentDocs.length === 0) {
                     recentContainer.innerHTML = `<p class="text-muted">Загруженных документов пока нет.</p>`;
                 } else {
@@ -388,11 +616,15 @@ const App = {
                                     <div class="text-muted" style="font-size: 0.8em;">#${doc.id} • ${doc.documentTypeDisplayName || doc.documentType} • ${this.formatDate(doc.createdAt)}</div>
                                 </div>
                             </div>
-                            <span class="badge ${this.getStatusBadgeClass(doc.status)}">${doc.status}</span>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <span class="badge ${this.getStatusBadgeClass(doc.status)}">${doc.status}</span>
+                                <button class="btn btn-secondary btn-sm" onclick="App.openAnalysisModal(${doc.id})">🔍</button>
+                            </div>
                         </div>
                     `).join('');
                 }
             }
+
         } catch (e) {
             console.warn('Не удалось загрузить данные Dashboard:', e.message);
         }
@@ -755,6 +987,24 @@ const App = {
 
         if (btnAnalyze) {
             btnAnalyze.addEventListener('click', () => this.runDocumentAnalysis());
+        }
+
+        const btnExportCsv = document.getElementById('modal-btn-export-csv');
+        if (btnExportCsv) {
+            btnExportCsv.addEventListener('click', () => {
+                if (this.currentAnalysisDocId) {
+                    window.open(ApiClient.getDocumentExportCsvUrl(this.currentAnalysisDocId), '_blank');
+                }
+            });
+        }
+
+        const btnExportJson = document.getElementById('modal-btn-export-json');
+        if (btnExportJson) {
+            btnExportJson.addEventListener('click', () => {
+                if (this.currentAnalysisDocId) {
+                    window.open(ApiClient.getDocumentExportJsonUrl(this.currentAnalysisDocId), '_blank');
+                }
+            });
         }
 
         // Переключение 3 вкладок в инспекторе (Поля, OCR, Валидация)

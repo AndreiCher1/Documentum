@@ -85,11 +85,40 @@
                             <span class="status-badge checking">Проверка...</span>
                         </div>
                     </div>
-                    <div class="status-card" id="status-docs-count">
-                        <div class="status-icon">📑</div>
-                        <div class="status-info">
-                            <h3>Всего документов</h3>
-                            <span class="status-number" id="dashboard-total-count">0</span>
+                </div>
+
+                <!-- Аналитические KPI карточки -->
+                <div class="kpi-cards-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-icon">📑</div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Всего документов</span>
+                            <span class="kpi-value" id="dashboard-total-count">0</span>
+                            <span class="kpi-sub" id="dashboard-status-pills">0 готово • 0 в работе</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">💾</div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Общий объём архива</span>
+                            <span class="kpi-value" id="dashboard-total-size">0 МБ</span>
+                            <span class="kpi-sub">Файлы на сервере</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">🎯</div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Средняя уверенность AI</span>
+                            <span class="kpi-value" id="dashboard-avg-confidence">0%</span>
+                            <span class="kpi-sub">OCR и классификация</span>
+                        </div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-icon">✅</div>
+                        <div class="kpi-content">
+                            <span class="kpi-label">Успешность обработки</span>
+                            <span class="kpi-value" id="dashboard-success-rate">0%</span>
+                            <span class="kpi-sub" id="dashboard-success-sub">0 из 0 без сбоев</span>
                         </div>
                     </div>
                 </div>
@@ -99,11 +128,28 @@
                         🔄 Проверить связь
                     </button>
                     <button class="btn btn-secondary" id="btn-quick-upload">
-                        📤 Загрузить документ
+                        📤 Загрузить документы
+                    </button>
+                    <button class="btn btn-secondary" id="btn-dashboard-export-csv" title="Экспорт всего реестра документов в CSV с поддержкой русского языка">
+                        📊 Экспорт реестра (CSV)
+                    </button>
+                    <button class="btn btn-secondary" id="btn-dashboard-export-json" title="Экспорт всех документов в формате JSON">
+                        📦 Экспорт базы (JSON)
                     </button>
                 </div>
 
                 <div id="health-result" class="result-box" style="display: none;"></div>
+
+                <!-- Распределение по категориям документов -->
+                <div class="dashboard-section">
+                    <div class="section-header-row">
+                        <h3>Распределение по категориям документов</h3>
+                        <span class="text-muted" id="dashboard-categories-meta">0 типов определено</span>
+                    </div>
+                    <div id="dashboard-categories-container" class="categories-distribution-grid">
+                        <p class="text-muted">Статистика по категориям загружается...</p>
+                    </div>
+                </div>
 
                 <div class="dashboard-section">
                     <h3>Последние загруженные документы</h3>
@@ -115,39 +161,51 @@
 
             <!-- Upload -->
             <div id="page-upload" class="page">
-                <h2>Загрузка документа</h2>
-                <p class="subtitle">Загрузите скан или PDF документа для интеллектуального анализа</p>
+                <h2>Загрузка документов</h2>
+                <p class="subtitle">Загрузите один или несколько документов (PDF или сканы) для интеллектуального анализа</p>
 
                 <div id="drop-zone" class="drop-zone">
                     <div class="drop-zone-content">
-                        <span class="drop-icon">📄</span>
-                        <h3>Перетащите файл сюда</h3>
-                        <p class="drop-text">или нажмите кнопку ниже для выбора</p>
-                        <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.tiff,.tif,.bmp" style="display: none;" />
+                        <span class="drop-icon">📁</span>
+                        <h3>Перетащите файлы сюда (поддерживается пакетная загрузка)</h3>
+                        <p class="drop-text">или нажмите кнопку ниже для выбора файлов</p>
+                        <input type="file" id="file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff,.tif,.bmp" style="display: none;" />
                         <button class="btn btn-primary" id="btn-browse-file">
-                            📂 Выбрать файл с диска
+                            📂 Выбрать файлы с диска
                         </button>
-                        <p class="format-hint">Поддерживаются: PDF, PNG, JPG, JPEG, TIFF, BMP (макс. 50 МБ)</p>
+                        <p class="format-hint">Поддерживаются: PDF, PNG, JPG, JPEG, TIFF, BMP (макс. 50 МБ на файл)</p>
                     </div>
                 </div>
 
-                <!-- Блок выбранного файла -->
-                <div id="selected-file-card" class="file-card" style="display: none;">
-                    <div class="file-card-info">
-                        <span class="file-card-icon">📎</span>
-                        <div>
-                            <h4 id="selected-file-name">filename.pdf</h4>
-                            <span id="selected-file-size" class="text-muted">1.2 МБ</span>
+                <!-- Блок очереди пакетной загрузки файлов -->
+                <div id="batch-upload-container" class="batch-upload-card" style="display: none;">
+                    <div class="batch-upload-header">
+                        <div class="batch-summary-info">
+                            <h4>Очередь файлов (<span id="batch-file-count">0</span>)</h4>
+                            <span id="batch-total-size" class="text-muted">Общий объём: 0 МБ</span>
+                        </div>
+                        <div class="batch-actions-buttons">
+                            <button class="btn btn-primary" id="btn-batch-upload-all">
+                                🚀 Загрузить все файлы (<span id="batch-upload-btn-count">0</span>)
+                            </button>
+                            <button class="btn btn-danger" id="btn-batch-clear-all">
+                                🗑️ Очистить очередь
+                            </button>
                         </div>
                     </div>
-                    <div class="file-card-actions">
-                        <button class="btn btn-primary" id="btn-start-upload">
-                            🚀 Отправить на сервер
-                        </button>
-                        <button class="btn btn-danger" id="btn-cancel-file">
-                            ❌ Отмена
-                        </button>
+
+                    <!-- Общий прогресс-бар загрузки -->
+                    <div id="batch-overall-progress" class="batch-progress-wrapper" style="display: none;">
+                        <div class="batch-progress-header">
+                            <span id="batch-progress-text">Загрузка файлов...</span>
+                            <span id="batch-progress-percent">0%</span>
+                        </div>
+                        <div class="batch-progress-track">
+                            <div id="batch-progress-fill" class="batch-progress-fill" style="width: 0%;"></div>
+                        </div>
                     </div>
+
+                    <div id="batch-files-list" class="batch-files-list"></div>
                 </div>
 
                 <div id="upload-status" class="alert-box" style="display: none;"></div>
@@ -160,9 +218,17 @@
                         <h2>Документы</h2>
                         <p class="subtitle">Реестр загруженных документов</p>
                     </div>
-                    <button class="btn btn-secondary" id="btn-refresh-docs">
-                        🔄 Обновить
-                    </button>
+                    <div class="page-header-actions" style="display: flex; gap: 8px; align-items: center;">
+                        <button class="btn btn-secondary" id="btn-refresh-docs">
+                            🔄 Обновить
+                        </button>
+                        <button class="btn btn-secondary" id="btn-export-registry-csv" title="Экспорт реестра в Excel CSV (UTF-8 с BOM)">
+                            📊 Экспорт CSV
+                        </button>
+                        <button class="btn btn-secondary" id="btn-export-registry-json" title="Экспорт реестра документов в JSON">
+                            📦 Экспорт JSON
+                        </button>
+                    </div>
                 </div>
 
                 <div class="table-container">
@@ -309,9 +375,15 @@
                     <div class="quality-metrics-bar" id="modal-metrics-bar">
                         <span class="text-muted">Метрики качества будут рассчитаны при анализе</span>
                     </div>
-                    <div style="display: flex; gap: 10px; align-items: center;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
                         <div id="modal-classification-badge"></div>
                         <div id="modal-validation-badge" style="display: none;"></div>
+                        <button class="btn btn-secondary btn-sm" id="modal-btn-export-csv" title="Экспорт распознанных полей документа в Excel CSV">
+                            📊 CSV
+                        </button>
+                        <button class="btn btn-secondary btn-sm" id="modal-btn-export-json" title="Экспорт данных документа в JSON">
+                            📦 JSON
+                        </button>
                         <button class="btn btn-primary" id="modal-btn-analyze">
                             ⚡ Запустить AI-анализ
                         </button>

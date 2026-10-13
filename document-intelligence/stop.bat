@@ -42,3 +42,4 @@ if ($electronProcs) {
 echo.
 echo Все сервисы Document Intelligence остановлены.
 timeout /t 3 >nul
+

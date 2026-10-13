@@ -1672,5 +1672,289 @@ h2 {
     border: 1px solid rgba(255, 183, 77, 0.4);
 }
 
+/* ========================================================
+   ЭТАП 11: Аналитические KPI, Категории, Пакетная загрузка
+   ======================================================== */
+
+/* KPI Карточки на Dashboard */
+.kpi-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.kpi-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.kpi-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(79, 195, 247, 0.3);
+}
+
+.kpi-icon {
+    font-size: 2.2em;
+    flex-shrink: 0;
+}
+
+.kpi-content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.kpi-label {
+    font-size: 0.75em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-weight: 600;
+}
+
+.kpi-value {
+    font-size: 1.7em;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+    margin: 3px 0 2px 0;
+}
+
+.kpi-sub {
+    font-size: 0.78em;
+    color: var(--accent);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Распределение категорий документов */
+.section-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.categories-distribution-grid {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.cat-dist-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.cat-dist-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.88em;
+}
+
+.cat-dist-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cat-dist-stats {
+    font-size: 0.82em;
+    color: var(--text-secondary);
+}
+
+.cat-dist-track {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.cat-dist-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), #81d4fa);
+    border-radius: 4px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Пакетная загрузка файлов */
+.batch-upload-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 22px;
+    margin-top: 24px;
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.batch-upload-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.batch-summary-info h4 {
+    font-size: 1.1em;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.batch-actions-buttons {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.batch-progress-wrapper {
+    margin-bottom: 18px;
+    padding: 12px 16px;
+    background: var(--bg-primary);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+}
+
+.batch-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85em;
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+}
+
+.batch-progress-track {
+    height: 9px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.batch-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4fc3f7, #66bb6a);
+    border-radius: 5px;
+    transition: width 0.25s ease;
+}
+
+.batch-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.batch-file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.batch-file-item:hover {
+    background: var(--bg-hover);
+    border-color: rgba(79, 195, 247, 0.3);
+}
+
+.batch-file-item.uploading {
+    border-color: var(--warning);
+    background: rgba(255, 167, 38, 0.05);
+}
+
+.batch-file-item.completed {
+    border-color: var(--success);
+    background: rgba(102, 187, 106, 0.05);
+}
+
+.batch-file-item.failed {
+    border-color: var(--error);
+    background: rgba(239, 83, 80, 0.05);
+}
+
+.batch-file-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.batch-file-icon {
+    font-size: 1.4em;
+    flex-shrink: 0;
+}
+
+.batch-file-meta-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.batch-file-name {
+    font-weight: 600;
+    font-size: 0.9em;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.batch-file-sub {
+    font-size: 0.78em;
+    color: var(--text-muted);
+}
+
+.batch-file-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.btn-remove-batch-item {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.1em;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: color 0.2s ease;
+}
+
+.btn-remove-batch-item:hover {
+    color: var(--error);
+}
+
+
 
 
