@@ -23,9 +23,13 @@ const App = {
         this.setupFileUpload();
         this.setupDocumentsPage();
         this.setupAnalysisModal();
+        this.setupBatchModal();
         this.setupSearchPage();
         this.setupExperimentsPage();
         this.setupSettings();
+
+        // Инициализируем центр уведомлений
+        this.initNotifications();
 
         // Проверяем доступность сервисов и загружаем статистику
         this.checkHealth();
@@ -44,6 +48,390 @@ const App = {
             toast.style.transform = 'translateY(10px)';
             setTimeout(() => toast.remove(), 250);
         }, 3200);
+    },
+
+    /**
+     * === Центр уведомлений (Notification Center) ===
+     */
+    notifications: [],
+
+    initNotifications() {
+        try {
+            const saved = localStorage.getItem('docintel_notifications');
+            if (saved) {
+                this.notifications = JSON.parse(saved);
+            }
+        } catch (e) {
+            this.notifications = [];
+        }
+
+        if (!Array.isArray(this.notifications) || this.notifications.length === 0) {
+            this.notifications = [
+                {
+                    id: 'welcome-1',
+                    title: 'Система DocIntel готова к работе',
+                    desc: 'Подключены модули классификации, OCR и семантического поиска.',
+                    type: 'info',
+                    docId: null,
+                    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                    timestamp: Date.now(),
+                    read: true
+                }
+            ];
+        }
+
+        this.renderNotificationsList();
+        this.updateNotificationBadge();
+        this.setupNotificationsListeners();
+    },
+
+    addNotification({ title, desc, type = 'info', docId = null }) {
+        const notif = {
+            id: Date.now() + Math.random().toString(36).substring(2, 6),
+            title,
+            desc,
+            type, // 'success', 'info', 'warning', 'danger'
+            docId: docId ? Number(docId) : null,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: Date.now(),
+            read: false
+        };
+
+        this.notifications.unshift(notif);
+        if (this.notifications.length > 50) this.notifications.pop();
+
+        try {
+            localStorage.setItem('docintel_notifications', JSON.stringify(this.notifications));
+        } catch (e) {}
+
+        this.renderNotificationsList();
+        this.updateNotificationBadge();
+    },
+
+    updateNotificationBadge() {
+        const badge = document.getElementById('notification-badge');
+        const countBadge = document.getElementById('notif-unread-count');
+        const unreadCount = this.notifications.filter(n => !n.read).length;
+
+        if (badge) {
+            badge.style.display = unreadCount > 0 ? 'block' : 'none';
+        }
+        if (countBadge) {
+            countBadge.textContent = unreadCount;
+        }
+    },
+
+    markNotificationsAsRead() {
+        this.notifications.forEach(n => n.read = true);
+        try {
+            localStorage.setItem('docintel_notifications', JSON.stringify(this.notifications));
+        } catch (e) {}
+        this.updateNotificationBadge();
+        this.renderNotificationsList();
+    },
+
+    clearNotifications() {
+        this.notifications = [];
+        try {
+            localStorage.removeItem('docintel_notifications');
+        } catch (e) {}
+        this.updateNotificationBadge();
+        this.renderNotificationsList();
+        this.showToast('Все уведомления удалены', 'info');
+    },
+
+    toggleNotificationsPopover() {
+        const popover = document.getElementById('notifications-popover');
+        if (!popover) return;
+        const isOpen = popover.style.display !== 'none';
+        if (isOpen) {
+            popover.style.display = 'none';
+        } else {
+            popover.style.display = 'block';
+            this.markNotificationsAsRead();
+        }
+    },
+
+    setupNotificationsListeners() {
+        const btnBell = document.getElementById('btn-topbar-notifications');
+        const popover = document.getElementById('notifications-popover');
+        const btnClear = document.getElementById('btn-clear-notifications');
+
+        if (btnBell) {
+            btnBell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleNotificationsPopover();
+            });
+        }
+
+        if (btnClear) {
+            btnClear.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.clearNotifications();
+            });
+        }
+
+        // Закрытие при клике мимо всплывающего окна
+        document.addEventListener('click', (e) => {
+            if (popover && popover.style.display !== 'none') {
+                if (!e.target.closest('#notifications-wrapper')) {
+                    popover.style.display = 'none';
+                }
+            }
+        });
+
+        // Закрытие по Escape
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && popover && popover.style.display !== 'none') {
+                popover.style.display = 'none';
+            }
+        });
+    },
+
+    renderNotificationsList() {
+        const list = document.getElementById('notifications-list');
+        if (!list) return;
+
+        if (!this.notifications || this.notifications.length === 0) {
+            list.innerHTML = `
+                <div class="notifications-empty" id="notifications-empty">
+                    <svg><use href="#icon-bell"></use></svg>
+                    <span>Нет новых уведомлений</span>
+                </div>
+            `;
+            return;
+        }
+
+        list.innerHTML = this.notifications.map(n => {
+            let iconId = 'icon-bell';
+            if (n.type === 'success') iconId = 'icon-check';
+            else if (n.type === 'danger') iconId = 'icon-x';
+            else if (n.type === 'info') iconId = 'icon-zap';
+            else if (n.type === 'warning') iconId = 'icon-eye';
+
+            const unreadClass = !n.read ? 'unread' : '';
+            const clickableClass = n.docId ? 'has-doc-link' : '';
+
+            return `
+                <div class="notif-item ${unreadClass} ${clickableClass}" data-doc-id="${n.docId || ''}" title="${n.docId ? 'Нажмите, чтобы открыть документ в инспекторе' : ''}">
+                    <div class="notif-icon-pill ${n.type}">
+                        <svg><use href="#${iconId}"></use></svg>
+                    </div>
+                    <div class="notif-content">
+                        <div class="notif-item-title">${this.escapeHtml(n.title)}</div>
+                        <div class="notif-item-desc">${this.escapeHtml(n.desc)}</div>
+                        <div class="notif-item-time">${n.time}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        list.querySelectorAll('.notif-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const docId = item.dataset.docId;
+                if (docId) {
+                    const popover = document.getElementById('notifications-popover');
+                    if (popover) popover.style.display = 'none';
+                    this.openAnalysisModal(Number(docId));
+                }
+            });
+        });
+    },
+
+    /**
+     * === Пакетный AI-анализ неразобранных документов ===
+     */
+    isBatchProcessing: false,
+    cancelBatchProcessing: false,
+
+    setupBatchModal() {
+        const modal = document.getElementById('batch-analysis-modal');
+        const btnClose = document.getElementById('batch-modal-btn-close');
+        const btnCancel = document.getElementById('batch-modal-btn-cancel');
+
+        if (btnClose) {
+            btnClose.addEventListener('click', () => {
+                if (this.isBatchProcessing) {
+                    if (confirm('Прервать текущий пакетный анализ документов?')) {
+                        this.cancelBatchProcessing = true;
+                    }
+                } else {
+                    if (modal) modal.style.display = 'none';
+                }
+            });
+        }
+
+        if (btnCancel) {
+            btnCancel.addEventListener('click', () => {
+                if (this.isBatchProcessing) {
+                    this.cancelBatchProcessing = true;
+                    btnCancel.textContent = 'Останавливаем...';
+                    btnCancel.disabled = true;
+                } else {
+                    if (modal) modal.style.display = 'none';
+                }
+            });
+        }
+
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal && !this.isBatchProcessing) {
+                    modal.style.display = 'none';
+                }
+            });
+        }
+    },
+
+    async analyzePendingDocuments() {
+        if (this.isBatchProcessing) {
+            this.showToast('Пакетная обработка уже выполняется', 'warning');
+            return;
+        }
+
+        const pending = (this.allDocuments || []).filter(d => d.status === 'UPLOADED' || d.status === 'FAILED');
+        if (pending.length === 0) {
+            this.showToast('Все документы в архиве уже проанализированы нейросетью!', 'success');
+            return;
+        }
+
+        await this.runBatchDocumentAnalysis(pending);
+    },
+
+    async analyzeSelectedDocuments() {
+        if (this.isBatchProcessing) {
+            this.showToast('Пакетная обработка уже выполняется', 'warning');
+            return;
+        }
+
+        const checkedIds = Array.from(document.querySelectorAll('.doc-row-check:checked')).map(c => Number(c.dataset.id));
+        if (checkedIds.length === 0) {
+            this.showToast('Выберите хотя бы один документ для анализа', 'warning');
+            return;
+        }
+
+        const selectedDocs = (this.allDocuments || []).filter(d => checkedIds.includes(d.id));
+        await this.runBatchDocumentAnalysis(selectedDocs);
+    },
+
+    async runBatchDocumentAnalysis(docs) {
+        if (!docs || docs.length === 0) return;
+
+        this.isBatchProcessing = true;
+        this.cancelBatchProcessing = false;
+
+        const modal = document.getElementById('batch-analysis-modal');
+        const subtitle = document.getElementById('batch-modal-subtitle');
+        const statusText = document.getElementById('batch-modal-status-text');
+        const percentText = document.getElementById('batch-modal-percent-text');
+        const progressFill = document.getElementById('batch-modal-progress-fill');
+        const logList = document.getElementById('batch-modal-log-list');
+        const btnCancel = document.getElementById('batch-modal-btn-cancel');
+
+        if (modal) modal.style.display = 'flex';
+        if (subtitle) subtitle.textContent = `В очереди на анализ: ${docs.length} документов`;
+        if (logList) logList.innerHTML = '';
+        if (btnCancel) {
+            btnCancel.textContent = 'Остановить';
+            btnCancel.className = 'btn btn-secondary btn-sm';
+            btnCancel.disabled = false;
+        }
+
+        let successCount = 0;
+        let failCount = 0;
+
+        for (let i = 0; i < docs.length; i++) {
+            if (this.cancelBatchProcessing) {
+                if (logList) {
+                    const item = document.createElement('div');
+                    item.className = 'batch-log-item warning';
+                    item.innerHTML = `<span class="log-badge">⚠</span> <span class="log-title">Анализ прерван пользователем</span> <span class="log-desc">Остановлено на шаге ${i} из ${docs.length}</span>`;
+                    logList.appendChild(item);
+                }
+                break;
+            }
+
+            const doc = docs[i];
+            const currentIdx = i + 1;
+            const pct = Math.round((i / docs.length) * 100);
+
+            if (statusText) statusText.textContent = `[${currentIdx}/${docs.length}] Анализ «${doc.originalFilename}»...`;
+            if (percentText) percentText.textContent = `${pct}%`;
+            if (progressFill) progressFill.style.width = `${pct}%`;
+
+            try {
+                const result = await ApiClient.analyzeDocument(doc.id);
+                successCount++;
+                const docType = this.getDisplayDocType(result);
+                const fieldsCount = (result.fields || []).length;
+                const conf = Math.round((result.typeConfidence || 0) * 100);
+
+                if (logList) {
+                    const item = document.createElement('div');
+                    item.className = 'batch-log-item success';
+                    item.innerHTML = `
+                        <span class="log-badge">✓</span>
+                        <span class="log-title">${this.escapeHtml(doc.originalFilename)}</span>
+                        <span class="log-desc">${docType} (${conf}%, ${fieldsCount} реквизитов)</span>
+                    `;
+                    logList.appendChild(item);
+                    logList.scrollTop = logList.scrollHeight;
+                }
+
+                this.addNotification({
+                    title: 'Документ успешно распознан',
+                    desc: `«${doc.originalFilename}» — ${docType} (${fieldsCount} полей)`,
+                    type: 'success',
+                    docId: doc.id
+                });
+
+            } catch (err) {
+                failCount++;
+                console.error(`Ошибка при анализе документа #${doc.id}:`, err);
+                if (logList) {
+                    const item = document.createElement('div');
+                    item.className = 'batch-log-item danger';
+                    item.innerHTML = `
+                        <span class="log-badge">✗</span>
+                        <span class="log-title">${this.escapeHtml(doc.originalFilename)}</span>
+                        <span class="log-desc">${this.escapeHtml(err.message)}</span>
+                    `;
+                    logList.appendChild(item);
+                    logList.scrollTop = logList.scrollHeight;
+                }
+
+                this.addNotification({
+                    title: 'Ошибка анализа документа',
+                    desc: `«${doc.originalFilename}»: ${err.message}`,
+                    type: 'danger',
+                    docId: doc.id
+                });
+            }
+
+            // Обновляем список документов в фоне
+            await this.loadDocuments();
+            this.loadDashboardData();
+        }
+
+        const finalPct = 100;
+        if (percentText) percentText.textContent = `${finalPct}%`;
+        if (progressFill) progressFill.style.width = `${finalPct}%`;
+        if (statusText) statusText.textContent = `Готово: ${successCount} успешно, ${failCount} ошибок`;
+        if (btnCancel) {
+            btnCancel.textContent = 'Закрыть';
+            btnCancel.className = 'btn btn-primary btn-sm';
+            btnCancel.disabled = false;
+        }
+
+        this.isBatchProcessing = false;
+        this.showToast(`Пакетный анализ завершён! Успешно: ${successCount}, с ошибками: ${failCount}`, successCount > 0 ? 'success' : 'warning');
+        this.addNotification({
+            title: 'Пакетный анализ завершён',
+            desc: `Всего документов: ${docs.length}. Успешно: ${successCount}, с ошибками: ${failCount}`,
+            type: 'info'
+        });
+
+        await this.loadDocuments();
+        this.loadDashboardData();
     },
 
     setupGlobalControls() {
@@ -524,6 +912,11 @@ const App = {
      * Настройка вкладки "Документы" и загрузка реестра.
      */
     setupDocumentsPage() {
+        const btnAnalyzePending = document.getElementById('btn-analyze-pending-docs');
+        if (btnAnalyzePending) {
+            btnAnalyzePending.addEventListener('click', () => this.analyzePendingDocuments());
+        }
+
         const btnRefresh = document.getElementById('btn-refresh-docs');
         if (btnRefresh) {
             btnRefresh.addEventListener('click', () => this.loadDocuments());
@@ -572,6 +965,11 @@ const App = {
         }
 
         // Floating Bulk Action Bar Buttons
+        const bulkAnalyze = document.getElementById('bulk-btn-analyze');
+        if (bulkAnalyze) {
+            bulkAnalyze.addEventListener('click', () => this.analyzeSelectedDocuments());
+        }
+
         const bulkExportCsv = document.getElementById('bulk-btn-export-csv');
         if (bulkExportCsv) {
             bulkExportCsv.addEventListener('click', () => {
@@ -683,17 +1081,31 @@ const App = {
         const procCount = this.allDocuments.filter(d => d.status === 'PROCESSING' || d.status === 'UPLOADED').length;
         const compCount = this.allDocuments.filter(d => d.status === 'COMPLETED').length;
 
+        const pendingCount = this.allDocuments.filter(d => d.status === 'UPLOADED' || d.status === 'FAILED').length;
+
         const elAll = document.getElementById('segment-all-count');
         const elRev = document.getElementById('segment-review-count');
         const elProc = document.getElementById('segment-proc-count');
         const elComp = document.getElementById('segment-comp-count');
         const elNav = document.getElementById('nav-docs-count');
+        const elPending = document.getElementById('pending-docs-count');
+        const btnPending = document.getElementById('btn-analyze-pending-docs');
 
         if (elAll) elAll.textContent = allCount;
         if (elRev) elRev.textContent = reviewCount;
         if (elProc) elProc.textContent = procCount;
         if (elComp) elComp.textContent = compCount;
         if (elNav) elNav.textContent = allCount;
+        if (elPending) elPending.textContent = pendingCount;
+
+        if (btnPending) {
+            btnPending.disabled = pendingCount === 0;
+            if (pendingCount === 0) {
+                btnPending.title = 'Все документы в архиве уже проанализированы нейросетью';
+            } else {
+                btnPending.title = `Запустить AI-анализ всех нераспознанных документов (${pendingCount})`;
+            }
+        }
 
         let filtered = this.allDocuments.filter(doc => {
             if (segment === 'review') {
@@ -1962,10 +2374,26 @@ const App = {
                 statusEl.innerHTML = '<span class="dot"></span><span>COMPLETED</span>';
             }
 
+            const detectedType = this.getDisplayDocType(result);
+            const fieldsNum = (result.fields || []).length;
+            this.addNotification({
+                title: 'AI-анализ успешно завершён',
+                desc: `Документ #${this.currentAnalysisDocId} распознан: ${detectedType} (полей: ${fieldsNum})`,
+                type: 'success',
+                docId: this.currentAnalysisDocId
+            });
+
         } catch (error) {
             console.error('Ошибка запуска анализа:', error);
             metricsBar.innerHTML = `<span style="color: var(--danger-text);">Ошибка анализа: ${error.message}</span>`;
             ocrList.innerHTML = `<p class="text-center" style="color: var(--danger-text); margin-top: 40px;">${error.message}</p>`;
+
+            this.addNotification({
+                title: 'Сбой AI-анализа документа',
+                desc: `Документ #${this.currentAnalysisDocId}: ${error.message}`,
+                type: 'danger',
+                docId: this.currentAnalysisDocId
+            });
         } finally {
             if (btnAnalyze) {
                 btnAnalyze.disabled = false;

@@ -208,10 +208,28 @@
                 </div>
 
                 <div class="topbar-right">
-                    <button class="icon-btn" id="btn-topbar-notifications" title="Уведомления">
-                        <svg><use href="#icon-bell"></use></svg>
-                        <span class="notification-badge"></span>
-                    </button>
+                    <div class="notifications-wrapper" id="notifications-wrapper">
+                        <button class="icon-btn" id="btn-topbar-notifications" title="Уведомления">
+                            <svg><use href="#icon-bell"></use></svg>
+                            <span class="notification-badge" id="notification-badge" style="display: none;"></span>
+                        </button>
+                        <!-- Notifications Popover -->
+                        <div class="notifications-popover" id="notifications-popover" style="display: none;">
+                            <div class="notif-header">
+                                <div class="notif-title-row">
+                                    <span class="notif-title">Уведомления</span>
+                                    <span class="notif-count-badge" id="notif-unread-count">0</span>
+                                </div>
+                                <button class="btn-text-sm" id="btn-clear-notifications">Очистить все</button>
+                            </div>
+                            <div class="notif-list" id="notifications-list">
+                                <div class="notifications-empty" id="notifications-empty">
+                                    <svg><use href="#icon-bell"></use></svg>
+                                    <span>Нет новых уведомлений</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <button class="btn btn-primary" id="btn-topbar-upload">
                         <svg><use href="#icon-plus"></use></svg>
                         <span>Загрузить</span>
@@ -348,7 +366,11 @@
                             <h2 class="page-title">Реестр документов архива</h2>
                             <p class="page-subtitle">Централизованный список с результатами извлечения полей и уверенностью AI</p>
                         </div>
-                        <div style="display: flex; gap: 8px;">
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button class="btn btn-primary" id="btn-analyze-pending-docs" title="Запустить AI-анализ всех нераспознанных документов">
+                                <svg><use href="#icon-zap"></use></svg>
+                                <span>Анализировать неразобранные (<span id="pending-docs-count">0</span>)</span>
+                            </button>
                             <button class="btn btn-secondary" id="btn-refresh-docs" title="Обновить список">
                                 <svg><use href="#icon-refresh"></use></svg>
                                 <span>Обновить</span>
@@ -419,6 +441,10 @@
                     <!-- Floating Bulk Action Bar -->
                     <div class="floating-bulk-bar" id="floating-bulk-bar">
                         <span class="bulk-count" id="bulk-selected-count">Выбрано: 0</span>
+                        <button class="bulk-btn" id="bulk-btn-analyze" style="color: #60A5FA;">
+                            <svg><use href="#icon-zap"></use></svg>
+                            <span>Анализировать выбранные</span>
+                        </button>
                         <button class="bulk-btn" id="bulk-btn-export-csv">
                             <svg><use href="#icon-download"></use></svg>
                             <span>Экспорт CSV</span>
@@ -932,6 +958,39 @@
                     <!-- Hidden legacy OCR tab container for code compatibility -->
                     <div id="tab-ocr-content" style="display: none;"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Batch Analysis Progress Modal -->
+    <div id="batch-analysis-modal" class="modal-overlay" style="display: none; z-index: 1100;">
+        <div class="batch-modal-card">
+            <div class="batch-modal-header">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="notif-icon-pill info" style="margin: 0;">
+                        <svg><use href="#icon-zap"></use></svg>
+                    </div>
+                    <div>
+                        <div style="font-size: 14px; font-weight: 700; color: var(--text-primary);">Пакетный AI-анализ документов</div>
+                        <div id="batch-modal-subtitle" style="font-size: 11.5px; color: var(--text-muted);">Инициализация...</div>
+                    </div>
+                </div>
+                <button class="icon-btn" id="batch-modal-btn-close" style="width: 28px; height: 28px;">
+                    <svg><use href="#icon-x"></use></svg>
+                </button>
+            </div>
+            <div class="batch-modal-body">
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+                    <span id="batch-modal-status-text" style="font-weight: 500; color: var(--text-secondary);">Обработка...</span>
+                    <span id="batch-modal-percent-text" style="font-weight: 600; font-family: var(--font-mono); color: var(--primary);">0%</span>
+                </div>
+                <div class="batch-modal-progress-bar">
+                    <div id="batch-modal-progress-fill" class="batch-modal-progress-fill" style="width: 0%;"></div>
+                </div>
+                <div id="batch-modal-log-list" class="batch-modal-log-list"></div>
+            </div>
+            <div class="batch-modal-footer">
+                <button class="btn btn-secondary btn-sm" id="batch-modal-btn-cancel">Остановить</button>
             </div>
         </div>
     </div>
