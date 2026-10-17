@@ -43,3 +43,4 @@ echo Portable distribution is ready to use:
 echo %ROOT_DIR%document-intelligence\portable-ui\DocIntel-UI.exe
 echo.
 if not "%1"=="--no-pause" pause
+

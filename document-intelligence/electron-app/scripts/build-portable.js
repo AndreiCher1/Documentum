@@ -95,3 +95,4 @@ console.log('       [УСПЕХ] Портативная сборка успеш�
 console.log(`       Расположение: ${TARGET_PORTABLE_DIR}`);
 console.log('       Запуск:       DocIntel-UI.exe (не требует Node.js и npm)');
 console.log('======================================================================');
+

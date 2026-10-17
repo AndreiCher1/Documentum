@@ -17,3 +17,5 @@ target/
 *.pdf
 uploads/
 *.log
+*.rar
+*.zip

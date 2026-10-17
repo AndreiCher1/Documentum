@@ -10,3 +10,5 @@ document-intelligence/java-backend/uploads/
 document-intelligence/java-backend/data/
 *.log
 *.tmp
+*.rar
+*.zip
