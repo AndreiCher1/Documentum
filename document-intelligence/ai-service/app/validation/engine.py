@@ -18,6 +18,7 @@ from app.validation.inn_validator import validate_inn
 from app.validation.date_validator import validate_document_date
 from app.validation.math_validator import validate_table_mathematics, validate_total_consistency
 from app.validation.pts_validator import validate_pts_fields
+from app.validation.snils_validator import validate_snils
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,11 @@ class ValidationEngine:
         for f in fields:
             if f.field_type == "INN" or "inn" in f.name:
                 rules.append(validate_inn(f.value))
+
+        # 1.1 Валидация СНИЛС (если поле присутствует)
+        for f in fields:
+            if f.field_type == "SNILS" or "snils" in f.name:
+                rules.append(validate_snils(f.value))
 
         # 2. Валидация дат
         for f in fields:
