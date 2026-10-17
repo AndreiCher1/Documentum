@@ -324,6 +324,17 @@ namespace Documentum
         public static Process StartedJavaProcess = null;
         private static readonly object _logLock = new object();
 
+        // Cached runtime parameters for watchdog recovery
+        private static string _savedPythonExe = null;
+        private static string _savedAiDir = null;
+        private static string _savedPyScript = null;
+        private static string _savedPyLog = null;
+
+        private static string _savedJavaExe = null;
+        private static string _savedJavaDir = null;
+        private static string _savedJarPath = null;
+        private static string _savedBackendLog = null;
+
         public static void Log(string message)
         {
             lock (_logLock)
@@ -367,12 +378,17 @@ namespace Documentum
             string pythonExe = ResolvePythonExecutable(aiDir, splash);
             Log("Resolved Python: " + pythonExe);
 
+            string pyScript = Path.Combine(aiDir, "run.py");
+            string pyLog = Path.Combine(aiDir, "ai.log");
+            _savedPythonExe = pythonExe;
+            _savedAiDir = aiDir;
+            _savedPyScript = pyScript;
+            _savedPyLog = pyLog;
+
             // 2. Launch Python AI Service (Port 8000)
             if (!PortManager.IsPortListening(8000))
             {
                 splash.SetStatus("Запуск AI сервиса (порт 8000)...");
-                string pyScript = Path.Combine(aiDir, "run.py");
-                string pyLog = Path.Combine(aiDir, "ai.log");
                 Log("Starting Python AI Service: " + pythonExe + " \"" + pyScript + "\"");
                 StartedAiProcess = StartSilentProcess(pythonExe, "\"" + pyScript + "\"", aiDir, pyLog);
                 Log("StartedAiProcess PID: " + (StartedAiProcess != null ? StartedAiProcess.Id.ToString() : "NULL"));
@@ -410,6 +426,11 @@ namespace Documentum
             string backendLog = Path.Combine(javaDir, "backend.log");
             Log("Resolved Java: " + javaExe);
             Log("JAR Path (" + (File.Exists(jarPath) ? "EXISTS" : "NOT FOUND") + "): " + jarPath);
+
+            _savedJavaExe = javaExe;
+            _savedJavaDir = javaDir;
+            _savedJarPath = jarPath;
+            _savedBackendLog = backendLog;
 
             if (!PortManager.IsPortListening(8085))
             {
@@ -732,8 +753,9 @@ namespace Documentum
                 }
             }
 
-            // 2. Poll until ALL UI windows/processes are closed
+            // 2. Poll until ALL UI windows/processes are closed with automated background watchdog
             int emptyCount = 0;
+            int watchdogTick = 0;
             while (true)
             {
                 Thread.Sleep(1000);
@@ -753,6 +775,30 @@ namespace Documentum
                 else
                 {
                     emptyCount = 0;
+                    watchdogTick++;
+
+                    // Every 5 seconds: Watchdog check to self-heal any dropped backend service
+                    if (watchdogTick % 5 == 0)
+                    {
+                        // Check Python AI Service (port 8000)
+                        if (!PortManager.IsPortListening(8000) && !string.IsNullOrEmpty(_savedPythonExe) && File.Exists(_savedPythonExe))
+                        {
+                            Log("[Watchdog] Port 8000 is offline while UI is running. Auto-recovering Python AI Service...");
+                            StartedAiProcess = StartSilentProcess(_savedPythonExe, "\"" + _savedPyScript + "\"", _savedAiDir, _savedPyLog);
+                            Log("Watchdog started Python AI Service, PID: " + (StartedAiProcess != null ? StartedAiProcess.Id.ToString() : "NULL"));
+                        }
+
+                        // Check Java Backend (port 8085)
+                        if (!PortManager.IsPortListening(8085) && !string.IsNullOrEmpty(_savedJavaExe))
+                        {
+                            Log("[Watchdog] Port 8085 is offline while UI is running. Auto-recovering Java Backend...");
+                            if (File.Exists(_savedJarPath))
+                            {
+                                StartedJavaProcess = StartSilentProcess(_savedJavaExe, "-jar \"" + _savedJarPath + "\"", _savedJavaDir, _savedBackendLog);
+                            }
+                            Log("Watchdog started Java Backend, PID: " + (StartedJavaProcess != null ? StartedJavaProcess.Id.ToString() : "NULL"));
+                        }
+                    }
                 }
             }
 
@@ -940,3 +986,4 @@ namespace Documentum
         }
     }
 }
+

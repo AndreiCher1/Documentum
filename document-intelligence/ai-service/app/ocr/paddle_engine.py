@@ -44,7 +44,7 @@ class PaddleOcrEngine(BaseOcrEngine):
         """Ленивая или явная инициализация PaddleOCR с обработкой ошибок."""
         try:
             # На Windows CPU PaddlePaddle 3.4.0 имеет баг в oneDNN (mkldnn) PIR executor.
-            # Отключение mkldnn в predictor config решает проблему на 100%.
+            # Отключение mkldnn, onednn, New IR и ограничение числа потоков решает проблему на 100%.
             try:
                 import paddle.inference
                 if not hasattr(paddle.inference, "_docintel_patched"):
@@ -52,6 +52,12 @@ class PaddleOcrEngine(BaseOcrEngine):
                     def patched_create_predictor(config):
                         if hasattr(config, "disable_mkldnn"):
                             config.disable_mkldnn()
+                        if hasattr(config, "disable_onednn"):
+                            config.disable_onednn()
+                        if hasattr(config, "enable_new_ir"):
+                            config.enable_new_ir(False)
+                        if hasattr(config, "set_cpu_math_library_num_threads"):
+                            config.set_cpu_math_library_num_threads(4)
                         return orig_create_predictor(config)
                     paddle.inference.create_predictor = patched_create_predictor
                     paddle.inference._docintel_patched = True
@@ -96,25 +102,29 @@ class PaddleOcrEngine(BaseOcrEngine):
             return []
 
         orig_h, orig_w = image.shape[:2]
-        max_dim = 1920
-        scale = 1.0
+        max_dim = 1280
         ocr_input = image
 
         if max(orig_h, orig_w) > max_dim:
-            scale = max_dim / max(orig_h, orig_w)
-            target_w = int(round(orig_w * scale))
-            target_h = int(round(orig_h * scale))
+            scale = max_dim / float(max(orig_h, orig_w))
+            target_w = max(32, int(round((orig_w * scale) / 32.0)) * 32)
+            target_h = max(32, int(round((orig_h * scale) / 32.0)) * 32)
             ocr_input = cv2.resize(image, (target_w, target_h), interpolation=cv2.INTER_AREA)
-            logger.info(f"Изображение страницы {page_num} смасштабировано для OCR: {orig_w}x{orig_h} -> {target_w}x{target_h} (scale={scale:.3f})")
+            scale_x = target_w / float(orig_w)
+            scale_y = target_h / float(orig_h)
+            logger.info(f"Изображение страницы {page_num} смасштабировано для OCR: {orig_w}x{orig_h} -> {target_w}x{target_h} (scale_x={scale_x:.3f}, scale_y={scale_y:.3f})")
+        else:
+            scale_x = 1.0
+            scale_y = 1.0
 
         def _unscale_bbox(b: List[int]) -> List[int]:
-            if scale == 1.0 or not b:
+            if not b:
                 return b
             return [
-                max(0, min(orig_w, int(round(b[0] / scale)))),
-                max(0, min(orig_h, int(round(b[1] / scale)))),
-                max(0, min(orig_w, int(round(b[2] / scale)))),
-                max(0, min(orig_h, int(round(b[3] / scale))))
+                max(0, min(orig_w, int(round(b[0] / scale_x)))),
+                max(0, min(orig_h, int(round(b[1] / scale_y)))),
+                max(0, min(orig_w, int(round(b[2] / scale_x)))),
+                max(0, min(orig_h, int(round(b[3] / scale_y))))
             ]
 
         # PaddleOCR принимает изображение в формате BGR/RGB numpy array
@@ -244,7 +254,7 @@ class PaddleOcrEngine(BaseOcrEngine):
             # Условие: вертикальный блок или осмысленный текст с уверенностью от 0.35 до 0.75
             if aspect > 1.3 or (0.35 <= b.confidence < 0.75 and len(clean_t) >= 2):
                 crop = image[max(0, y1 - pad):min(H, y2 + pad), max(0, x1 - pad):min(W, x2 + pad)]
-                if crop.size > 0 and crop.shape[0] >= 6 and crop.shape[1] >= 6:
+                if crop.size > 0 and crop.shape[0] >= 16 and crop.shape[1] >= 16:
                     candidates.append((b, crop))
 
         # Ограничиваем максимальное количество для предотвращения задержек
@@ -266,18 +276,24 @@ class PaddleOcrEngine(BaseOcrEngine):
             all_crops.append(cv2.rotate(crop, cv2.ROTATE_180))
             mapping.append((b, 180))
 
-        try:
-            results = list(rec_model.predict(all_crops))
-            best_updates = {}  # id(b) -> (best_score, best_txt, best_deg, block)
+        best_updates = {}  # id(b) -> (best_score, best_txt, best_deg, block)
 
-            for (b, deg), r in zip(mapping, results):
-                t = r.get('rec_text', '').strip()
-                s = float(r.get('rec_score', 0.0))
-                if len(t) > 0:
-                    current_best = best_updates.get(id(b), (b.confidence, b.text, 0, b))
-                    # Условие обновления:
-                    if (b.confidence < 0.75 and s >= 0.65 and s > current_best[0]) or (s > current_best[0] + 0.10):
-                        best_updates[id(b)] = (s, t, deg, b)
+        try:
+            # Безопасная обработка пачками по 8 изображений с отловом исключений
+            for i in range(0, len(all_crops), 8):
+                batch_crops = all_crops[i:i + 8]
+                batch_mapping = mapping[i:i + 8]
+                try:
+                    results = list(rec_model.predict(batch_crops))
+                    for (b, deg), r in zip(batch_mapping, results):
+                        t = r.get('rec_text', '').strip()
+                        s = float(r.get('rec_score', 0.0))
+                        if len(t) > 0:
+                            current_best = best_updates.get(id(b), (b.confidence, b.text, 0, b))
+                            if (b.confidence < 0.75 and s >= 0.65 and s > current_best[0]) or (s > current_best[0] + 0.10):
+                                best_updates[id(b)] = (s, t, deg, b)
+                except Exception as batch_err:
+                    logger.debug(f"Ошибка пачки распознавания ориентации: {batch_err}")
 
             for b_id, (score, txt, deg, b) in best_updates.items():
                 if deg != 0 and txt != b.text:
@@ -289,7 +305,7 @@ class PaddleOcrEngine(BaseOcrEngine):
                     b.confidence = round(score, 4)
 
         except Exception as ex:
-            logger.debug(f"Ошибка пакетной проверки поворота: {ex}")
+            logger.debug(f"Ошибка проверки поворота: {ex}")
 
         return blocks
 

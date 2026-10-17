@@ -99,26 +99,8 @@ async def health_check():
     )
 
 
-@app.post("/analyze", response_model=AnalyzeResponse)
-async def analyze_document(file: UploadFile = File(...)):
-    """
-    Полный анализ документа:
-    1. Чтение и валидация файла.
-    2. Предобработка: PyMuPDF (для PDF), OpenCV deskew, оценка резкости, CLAHE.
-    3. Распознавание текста нейросетью PaddleOCR (детекция блоков + OCR).
-    4. Формирование структурированного ответа с координатами Bounding Boxes.
-    """
+def _sync_analyze_document(content: bytes, filename: str) -> AnalyzeResponse:
     start_time = time.time()
-    filename = file.filename or "unknown_document"
-    logger.info(f"Получен файл для анализа: {filename} (тип: {file.content_type})")
-
-    content = await file.read()
-    if not content or len(content) == 0:
-        raise HTTPException(status_code=400, detail="Файл пустой")
-
-    if len(content) > settings.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="Размер файла превышает лимит (50 МБ)")
-
     # 1. Запуск конвейера предобработки
     try:
         preprocessor = DocumentPreprocessor(dpi=200, auto_enhance=True)
@@ -287,6 +269,30 @@ async def analyze_document(file: UploadFile = File(...)):
             f"({val_report.passed_rules}/{val_report.total_rules} пройдено)."
         )
     )
+
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+async def analyze_document(file: UploadFile = File(...)):
+    """
+    Полный анализ документа:
+    1. Чтение и валидация файла.
+    2. Предобработка: PyMuPDF (для PDF), OpenCV deskew, оценка резкости, CLAHE.
+    3. Распознавание текста нейросетью PaddleOCR (детекция блоков + OCR).
+    4. Формирование структурированного ответа с координатами Bounding Boxes.
+    Выполняется в отдельном потоке (asyncio.to_thread), не блокируя FastAPI event loop.
+    """
+    filename = file.filename or "unknown_document"
+    logger.info(f"Получен файл для анализа: {filename} (тип: {file.content_type})")
+
+    content = await file.read()
+    if not content or len(content) == 0:
+        raise HTTPException(status_code=400, detail="Файл пустой")
+
+    if len(content) > settings.MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="Размер файла превышает лимит (50 МБ)")
+
+    import asyncio
+    return await asyncio.to_thread(_sync_analyze_document, content, filename)
 
 
 @app.post("/render-page")
