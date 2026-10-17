@@ -67,17 +67,69 @@ if "%HEALTHY%"=="1" (
     echo [!] Backend is still initializing, opening interface...
 )
 
-REM 4. Launch Electron UI
-echo [3/3] Opening Electron user interface...
-cd /d "%ELECTRON_DIR%"
+REM 4. Launch Electron UI (Multi-level resilient launcher)
+echo [3/3] Opening user interface...
 set ELECTRON_RUN_AS_NODE=
-call npm start
+set "UI_LAUNCHED=0"
 
-REM 5. Shutdown background services when no Electron windows remain
-powershell -NoProfile -Command "if (Get-Process electron -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>&1
-if errorlevel 1 (
-    echo.
-    echo Stopping background services...
-    call "%ROOT_DIR%stop.bat"
+REM 4.1. Check if standalone portable build exists (fastest, 0 dependencies)
+if exist "%ROOT_DIR%portable-ui\DocIntel-UI.exe" (
+    echo [UI] Starting portable Electron interface (DocIntel-UI.exe)...
+    powershell -NoProfile -Command "Start-Process -FilePath '%ROOT_DIR%portable-ui\DocIntel-UI.exe' -WorkingDirectory '%ROOT_DIR%portable-ui'"
+    set "UI_LAUNCHED=1"
+    goto :monitor_app
 )
+
+REM 4.2. Check if local Electron binary is present in node_modules
+if exist "%ELECTRON_DIR%\node_modules\electron\dist\electron.exe" (
+    echo [UI] Starting Electron interface from local binary...
+    powershell -NoProfile -Command "Start-Process -FilePath '%ELECTRON_DIR%\node_modules\electron\dist\electron.exe' -ArgumentList '%ELECTRON_DIR%' -WorkingDirectory '%ELECTRON_DIR%'"
+    set "UI_LAUNCHED=1"
+    goto :monitor_app
+)
+
+REM 4.3. Fresh repository clone detected: auto-install dependencies if npm is available
+echo [UI] First launch detected: installing Electron dependencies (npm install)...
+cd /d "%ELECTRON_DIR%"
+call npm install --no-audit --no-fund
+if exist "%ELECTRON_DIR%\node_modules\electron\dist\electron.exe" (
+    echo [UI] Dependencies installed successfully, starting Electron...
+    powershell -NoProfile -Command "Start-Process -FilePath '%ELECTRON_DIR%\node_modules\electron\dist\electron.exe' -ArgumentList '%ELECTRON_DIR%' -WorkingDirectory '%ELECTRON_DIR%'"
+    set "UI_LAUNCHED=1"
+    goto :monitor_app
+)
+
+REM 4.4. Try npm start if electron was installed via system packages
+where.exe electron >nul 2>&1
+if not errorlevel 1 (
+    echo [UI] Starting via system electron...
+    call npm start
+    set "UI_LAUNCHED=1"
+    goto :monitor_app
+)
+
+REM 4.5. Fallback: If neither Electron nor Node.js is installed, open in browser / Edge App Mode
+echo [!] Electron / Node.js not detected on this system.
+echo [!] Launching DocIntel in Web App window mode...
+start "" msedge.exe --app="http://localhost:8085" >nul 2>&1
+if not errorlevel 1 (
+    set "UI_LAUNCHED=1"
+    goto :monitor_app
+)
+start "" "http://localhost:8085"
+set "UI_LAUNCHED=1"
+
+:monitor_app
+REM 5. Keep services running while UI window is open
+ping -n 3 127.0.0.1 >nul
+:wait_ui_closed
+powershell -NoProfile -Command "if (Get-Process electron,DocIntel-UI,DocIntel -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }" >nul 2>&1
+if not errorlevel 1 (
+    ping -n 3 127.0.0.1 >nul
+    goto :wait_ui_closed
+)
+
+echo.
+echo Stopping background services...
+call "%ROOT_DIR%stop.bat"
 exit /b 0

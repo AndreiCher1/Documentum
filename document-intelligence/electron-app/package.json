@@ -5,7 +5,8 @@
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "build:portable": "node scripts/build-portable.js"
   },
   "dependencies": {
     "electron": "^35.2.1"

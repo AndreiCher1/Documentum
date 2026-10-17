@@ -1,0 +1,12 @@
+# Git ignore for Documentum / DocIntel
+document-intelligence/portable-ui/
+document-intelligence/electron-app/node_modules/
+document-intelligence/electron-app/dist/
+document-intelligence/ai-service/venv/
+document-intelligence/ai-service/__pycache__/
+document-intelligence/ai-service/.env
+document-intelligence/java-backend/target/
+document-intelligence/java-backend/uploads/
+document-intelligence/java-backend/data/
+*.log
+*.tmp
