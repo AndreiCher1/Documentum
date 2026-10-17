@@ -19,11 +19,11 @@
 
 import logging
 from dataclasses import dataclass
-from typing import List, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 import cv2
 import numpy as np
 
-from app.preprocessing.pdf_converter import pdf_to_images
+from app.preprocessing.pdf_converter import pdf_to_images, pdf_to_pages_data
 from app.preprocessing.quality_checker import evaluate_image_quality, QualityMetrics
 from app.preprocessing.deskew import deskew_image
 from app.preprocessing.enhancer import enhance_document_image
@@ -39,6 +39,7 @@ class PreprocessedPage:
     processed_image: np.ndarray      # Финальное выровненное и улучшенное изображение
     quality: QualityMetrics          # Метрики качества
     applied_skew_angle: float        # Угол, на который было повернуто изображение
+    ocr_blocks: Optional[List[Any]] = None  # Векторные блоки цифрового слоя (если доступны)
 
 
 @dataclass
@@ -89,8 +90,9 @@ class DocumentPreprocessor:
             )
 
         # 1. Загрузка в список страниц np.ndarray
+        pdf_blocks_by_page = []
         if is_pdf:
-            raw_pages = pdf_to_images(file_bytes, dpi=self.dpi)
+            raw_pages, pdf_blocks_by_page = pdf_to_pages_data(file_bytes, dpi=self.dpi)
         else:
             # Чтение обычного растрового изображения из буфера байтов
             nparr = np.frombuffer(file_bytes, np.uint8)
@@ -117,15 +119,19 @@ class DocumentPreprocessor:
                 logger.info(f"Контраст страницы {idx} понижен ({quality.contrast}), применяем CLAHE улучшение")
                 final_img = enhance_document_image(deskewed_img)
 
-            processed_pages.append(
-                PreprocessedPage(
-                    page_number=idx,
-                    original_image=page_img,
-                    processed_image=final_img,
-                    quality=quality,
-                    applied_skew_angle=skew_angle
-                )
+            prep_page = PreprocessedPage(
+                page_number=idx,
+                original_image=page_img,
+                processed_image=final_img,
+                quality=quality,
+                applied_skew_angle=skew_angle
             )
+            # Если в PDF есть готовый векторный текстовый слой — используем его напрямую (в 50-100 раз быстрее OCR)
+            if is_pdf and (idx - 1) < len(pdf_blocks_by_page) and pdf_blocks_by_page[idx - 1]:
+                prep_page.ocr_blocks = pdf_blocks_by_page[idx - 1]
+                logger.info(f"Страница {idx} содержит цифровой слой ({len(prep_page.ocr_blocks)} блоков), OCR опущен.")
+
+            processed_pages.append(prep_page)
 
         return PreprocessingResult(
             pages=processed_pages,

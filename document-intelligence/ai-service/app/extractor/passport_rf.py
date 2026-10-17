@@ -14,9 +14,27 @@
 """
 
 import re
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 from app.extractor.base import BaseFieldExtractor, ExtractedFieldValue, find_field_bbox
+from app.extractor.fms_units import validate_and_refine_issued_by, get_canonical_issued_by, get_region_name_by_code
+
+
+# Таблица транслитерации «модернизированный клер» для внутренних паспортов РФ (Приказ ФМС РФ № 279 от 30.06.2011)
+MODERNIZED_CLER_MAP = {
+    'A': 'А', 'B': 'Б', 'V': 'В', 'G': 'Г', 'D': 'Д',
+    'E': 'Е', '2': 'Ё', 'J': 'Ж', 'Z': 'З', 'I': 'И',
+    'Q': 'Й', 'K': 'К', 'L': 'Л', 'M': 'М', 'N': 'Н',
+    'O': 'О', 'P': 'П', 'R': 'Р', 'S': 'С', 'T': 'Т',
+    'U': 'У', 'F': 'Ф', 'H': 'Х', 'C': 'Ц', '3': 'Ч',
+    '4': 'Ш', 'W': 'Щ', 'X': 'Ъ', 'Y': 'Ы', '9': 'Ь',
+    '6': 'Э', '7': 'Ю', '8': 'Я'
+}
+
+
+def decode_cler_part(part: str) -> str:
+    """Декодирует латинские символы и специальные цифры МЧЗ в русские буквы по приказу ФМС № 279."""
+    return "".join(MODERNIZED_CLER_MAP.get(ch, ch) for ch in part)
 
 
 class PassportRfExtractor(BaseFieldExtractor):
@@ -34,28 +52,99 @@ class PassportRfExtractor(BaseFieldExtractor):
         if re.search(r'итого\s+к\s+оплате|начислено|природный\s+газ|куб\.?\s*м|варочная\s+панель|перерасч[её]т', flat_text, re.IGNORECASE):
             return []
 
-        # Поиск MRZ строк (Машиночитаемая зона)
-        mrz_line1 = None
-        mrz_line2 = None
+        # ---------------------------------------------------------
+        # 0. Поиск и расшифровка MRZ строк (Машиночитаемая зона)
+        # ---------------------------------------------------------
+        mrz_line1: Optional[str] = None
+        mrz_line2: Optional[str] = None
+        mrz1_block = None
+        mrz2_block = None
+
         for block in (ocr_blocks or []):
             b_text = getattr(block, 'text', '') if hasattr(block, 'text') else str(block)
-            if 'RUS' in b_text:
-                if re.search(r'P[<A-Za-z0-9]*RUS', b_text):
-                    mrz_line1 = b_text
-                elif re.search(r'\d{3,}[A-Za-z0-9]*RUS', b_text):
-                    mrz_line2 = b_text
+            b_text_clean = b_text.strip()
+            if 'RUS' in b_text_clean:
+                if re.search(r'P[<A-Za-z0-9]*RUS', b_text_clean):
+                    mrz_line1 = b_text_clean
+                    mrz1_block = block
+                elif re.search(r'\d{3,}[A-Za-z0-9]*RUS', b_text_clean):
+                    mrz_line2 = b_text_clean
+                    mrz2_block = block
 
+        # Извлечение данных из MRZ line 2
+        mrz_subdivision_code: Optional[str] = None
+        mrz_series_number: Optional[str] = None
+        mrz_birth_date: Optional[str] = None
+        mrz_issue_date: Optional[str] = None
+        mrz_gender: Optional[str] = None
+
+        if mrz_line2:
+            clean_m2 = re.sub(r'\s+', '', mrz_line2)
+            # Формат строки 2 паспорта РФ:
+            # 0..2: серия_1 (3 цифры), 3..8: номер (6 цифр), 9: к.ч., 10..12: RUS
+            # 13..18: дата_рожд (YYMMDD), 19: к.ч., 20: пол (M/F), 21..27: разделители
+            # 28: серия_2 (4-я цифра), 29..34: дата_выдачи (YYMMDD), 35..40: код_подразделения (6 цифр)
+            m_full = re.search(r'(\d{3})(\d{6})\dRUS(\d{6})\d([MF])<{0,7}(\d)(\d{6})(\d{6})', clean_m2)
+            if m_full:
+                s1, num, b_raw, sex, s2, i_raw, c_raw = m_full.groups()
+                mrz_series_number = f"{s1[:2]} {s1[2:]}{s2} {num}"
+                century_b = "19" if int(b_raw[:2]) > 25 else "20"
+                mrz_birth_date = f"{b_raw[4:6]}.{b_raw[2:4]}.{century_b}{b_raw[:2]}"
+                century_i = "19" if int(i_raw[:2]) > 70 else "20"
+                mrz_issue_date = f"{i_raw[4:6]}.{i_raw[2:4]}.{century_i}{i_raw[:2]}"
+                mrz_gender = "МУЖ." if sex == "M" else "ЖЕН."
+                mrz_subdivision_code = f"{c_raw[:3]}-{c_raw[3:]}"
+            else:
+                # Частичный парсинг по регулярным выражениям
+                m_code = re.search(r'(\d{3})(\d{3})<', clean_m2)
+                if m_code:
+                    mrz_subdivision_code = f"{m_code.group(1)}-{m_code.group(2)}"
+                m_dates = re.search(r'RUS(\d{2})(\d{2})(\d{2})\d([MF])', clean_m2)
+                if m_dates:
+                    yy, mm, dd, g = m_dates.groups()
+                    century = "19" if int(yy) > 25 else "20"
+                    mrz_birth_date = f"{dd}.{mm}.{century}{yy}"
+                    mrz_gender = "МУЖ." if g == 'M' else "ЖЕН."
+
+        # Извлечение ФИО из MRZ line 1 по стандарту «модернизированный клер»
+        mrz_fio: Optional[str] = None
+        if mrz_line1:
+            m1 = re.search(r'P[<A-Za-z0-9]*RUS([A-Za-z0-9<]+)', mrz_line1)
+            if m1:
+                raw_parts = [p for p in m1.group(1).split('<') if p]
+                dec_parts = [decode_cler_part(p) for p in raw_parts]
+                if dec_parts:
+                    mrz_fio = " ".join(dec_parts[:3])
+
+        # ---------------------------------------------------------
         # 1. Код подразделения (XXX-XXX)
+        # ---------------------------------------------------------
+        subdivision_code_val = None
         subdivision_match = re.search(r'\b(\d{3}\s*[-—–]\s*\d{3})\b', flat_text)
         if subdivision_match:
             raw_code = subdivision_match.group(1)
-            clean_code = re.sub(r'\s+', '', raw_code).replace('—', '-').replace('–', '-')
-            bbox, page = find_field_bbox(clean_code, ocr_blocks)
+            subdivision_code_val = re.sub(r'\s+', '', raw_code).replace('—', '-').replace('–', '-')
+            bbox, page = find_field_bbox(subdivision_code_val, ocr_blocks)
             fields.append(
                 ExtractedFieldValue(
                     name="subdivision_code",
                     display_name="Код подразделения",
-                    value=clean_code,
+                    value=subdivision_code_val,
+                    field_type="TEXT",
+                    confidence=0.99,
+                    bbox=bbox,
+                    page=page
+                )
+            )
+        elif mrz_subdivision_code:
+            subdivision_code_val = mrz_subdivision_code
+            bbox = getattr(mrz2_block, 'bbox', None)
+            page = getattr(mrz2_block, 'page', 1)
+            fields.append(
+                ExtractedFieldValue(
+                    name="subdivision_code",
+                    display_name="Код подразделения",
+                    value=subdivision_code_val,
                     field_type="TEXT",
                     confidence=0.98,
                     bbox=bbox,
@@ -63,8 +152,9 @@ class PassportRfExtractor(BaseFieldExtractor):
                 )
             )
 
+        # ---------------------------------------------------------
         # 2. Серия и номер паспорта (4 цифры серии + 6 цифр номера)
-        # Примеры в OCR: "40 12 345678", "4012 345678", "40 12 № 345678"
+        # ---------------------------------------------------------
         series_num_match = re.search(r'\b(\d{2}\s*\d{2})\s*(?:№|N|No|#)?\s*(\d{6})\b', flat_text)
         if series_num_match:
             series = re.sub(r'\s+', '', series_num_match.group(1))
@@ -77,7 +167,7 @@ class PassportRfExtractor(BaseFieldExtractor):
                     display_name="Серия и номер",
                     value=full_series_number,
                     field_type="TEXT",
-                    confidence=0.96,
+                    confidence=0.98,
                     bbox=bbox,
                     page=page
                 )
@@ -85,7 +175,7 @@ class PassportRfExtractor(BaseFieldExtractor):
         else:
             fallback_match = re.search(r'\b(\d{4})\s*(\d{6})\b', flat_text)
             if fallback_match:
-                full_val = f"{fallback_match.group(1)} {fallback_match.group(2)}"
+                full_val = f"{fallback_match.group(1)[:2]} {fallback_match.group(1)[2:]} {fallback_match.group(2)}"
                 bbox, page = find_field_bbox(fallback_match.group(2), ocr_blocks)
                 fields.append(
                     ExtractedFieldValue(
@@ -93,13 +183,27 @@ class PassportRfExtractor(BaseFieldExtractor):
                         display_name="Серия и номер",
                         value=full_val,
                         field_type="TEXT",
-                        confidence=0.92,
+                        confidence=0.95,
+                        bbox=bbox,
+                        page=page
+                    )
+                )
+            elif mrz_series_number:
+                bbox = getattr(mrz2_block, 'bbox', None)
+                page = getattr(mrz2_block, 'page', 1)
+                fields.append(
+                    ExtractedFieldValue(
+                        name="series_number",
+                        display_name="Серия и номер",
+                        value=mrz_series_number,
+                        field_type="TEXT",
+                        confidence=0.98,
                         bbox=bbox,
                         page=page
                     )
                 )
             else:
-                # Поиск 6-значного номера и серии в отдельных блоках (например, вертикально на полях)
+                # Поиск 6-значного номера и серии в вертикальных блоках на правом поле
                 best_match = None
                 for b in (ocr_blocks or []):
                     b_txt = getattr(b, 'text', '').strip()
@@ -109,7 +213,6 @@ class PassportRfExtractor(BaseFieldExtractor):
                         b_page = getattr(b, 'page', 1)
                         b_bbox = getattr(b, 'bbox', None)
 
-                        # Ищем серию в той же вертикальной колонке (похожий X, выше номера)
                         if b_bbox:
                             cx = (b_bbox[0] + b_bbox[2]) / 2
                             col_blocks = []
@@ -120,11 +223,9 @@ class PassportRfExtractor(BaseFieldExtractor):
                                 if obbox and abs((obbox[0] + obbox[2]) / 2 - cx) < 60:
                                     col_blocks.append(other)
 
-                            # Блоки над номером (Y < Y_num)
                             above = [cb for cb in col_blocks if getattr(cb, 'bbox', [0, 0, 0, 0])[1] < b_bbox[1]]
                             above.sort(key=lambda x: getattr(x, 'bbox', [0, 0, 0, 0])[1])
 
-                            # 1) Два блока по 2 цифры над номером (например, "11" и "04")
                             two_blocks = [cb for cb in above if re.fullmatch(r'\d{2}', getattr(cb, 'text', '').strip())]
                             if len(two_blocks) >= 2:
                                 t1, t2 = two_blocks[-2], two_blocks[-1]
@@ -139,7 +240,6 @@ class PassportRfExtractor(BaseFieldExtractor):
                                 best_match = (f"{series_val} {num}", comb_bbox, b_page, 0.98)
                                 break
 
-                            # 2) Блок из 4 цифр над номером (например, "11 04" или "1104")
                             four_blocks = [cb for cb in above if re.fullmatch(r'\d{4}|\d{2}\s*\d{2}', getattr(cb, 'text', '').strip())]
                             if four_blocks:
                                 f_blk = four_blocks[-1]
@@ -171,437 +271,241 @@ class PassportRfExtractor(BaseFieldExtractor):
                         )
                     )
 
+        # ---------------------------------------------------------
         # 3. Даты: Дата выдачи и Дата рождения
-        date_pattern = r'\b(0[1-9]|[12][0-9]|3[01])\s*\.\s*(0[1-9]|1[0-2])\s*\.\s*([12]\d{3})\b'
-        raw_dates = list(re.finditer(date_pattern, flat_text))
-        all_dates = []
-        for rd in raw_dates:
-            day, month, year = rd.group(1), rd.group(2), rd.group(3)
-            # Исправление распространенных OCR-артефактов в годах рождения (например, "1682" вместо "1982")
-            if year.startswith(('16', '17', '18')) and not year.endswith(('19', '20')):
-                year = f"19{year[2:]}"
-            d_str = f"{day}.{month}.{year}"
-            all_dates.append((d_str, rd))
+        # ---------------------------------------------------------
+        issue_date_val = None
+        issue_date_box = None
+        birth_date_val = None
+        birth_date_box = None
 
-        # Поиск даты выдачи по контексту
-        issue_date_found = False
+        # Ищем дату выдачи
         issue_match = re.search(
             r'(?:дата\s*вы[дл]ачи|выдан[ао]?)\s*[:\.]?\s*(\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4})',
             flat_text,
             re.IGNORECASE
         )
         if issue_match:
-            raw_idate = issue_match.group(1)
-            issue_date = re.sub(r'\s+', '', raw_idate)
-            bbox, page = find_field_bbox(issue_date, ocr_blocks)
-            if not bbox:
-                bbox, page = find_field_bbox(raw_idate, ocr_blocks)
+            issue_date_val = re.sub(r'\s+', '', issue_match.group(1))
+            issue_date_box, page = find_field_bbox(issue_date_val, ocr_blocks)
+        else:
+            # Ищем блок даты в верхней части (Y < 450)
+            for b in (ocr_blocks or []):
+                btxt = getattr(b, 'text', '').strip()
+                bbox = getattr(b, 'bbox', [0, 0, 0, 0])
+                if bbox[1] < 450 and re.fullmatch(r'\d{2}\.\d{2}\.\d{4}', btxt):
+                    issue_date_val = btxt
+                    issue_date_box = bbox
+                    break
+            if not issue_date_val and mrz_issue_date:
+                issue_date_val = mrz_issue_date
+                issue_date_box = getattr(mrz2_block, 'bbox', None)
+
+        if issue_date_val:
             fields.append(
                 ExtractedFieldValue(
                     name="issue_date",
                     display_name="Дата выдачи",
-                    value=issue_date,
+                    value=issue_date_val,
                     field_type="DATE",
-                    confidence=0.97,
-                    bbox=bbox,
-                    page=page
+                    confidence=0.98,
+                    bbox=issue_date_box,
+                    page=1
                 )
             )
-            issue_date_found = True
 
-        # Поиск в отдельных блоках OCR для даты выдачи
-        if not issue_date_found:
-            for b in (ocr_blocks or []):
-                btxt = getattr(b, 'text', '')
-                if re.search(r'вы[дл]ач|выдан', btxt, re.IGNORECASE):
-                    dm = re.search(r'(\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4})', btxt)
-                    if dm:
-                        issue_date = re.sub(r'\s+', '', dm.group(1))
-                        fields.append(
-                            ExtractedFieldValue(
-                                name="issue_date",
-                                display_name="Дата выдачи",
-                                value=issue_date,
-                                field_type="DATE",
-                                confidence=0.98,
-                                bbox=getattr(b, 'bbox', None),
-                                page=getattr(b, 'page', 1)
-                            )
-                        )
-                        issue_date_found = True
-                        break
-
-        # Поиск даты рождения по контексту
-        birth_date_found = False
+        # Ищем дату рождения
         birth_match = re.search(
             r'(?:дата\s*рождения|родился|родилась|[ΔДд]ara\s*рождения)\s*[:\.]?\s*(\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4})',
             flat_text,
             re.IGNORECASE
         )
         if birth_match:
-            raw_bdate = birth_match.group(1)
-            birth_date = re.sub(r'\s+', '', raw_bdate)
-            bbox, page = find_field_bbox(birth_date, ocr_blocks)
-            if not bbox:
-                bbox, page = find_field_bbox(raw_bdate, ocr_blocks)
+            birth_date_val = re.sub(r'\s+', '', birth_match.group(1))
+            birth_date_box, page = find_field_bbox(birth_date_val, ocr_blocks)
+        else:
+            # Ищем дату в нижней половине страницы (Y >= 450)
+            for b in (ocr_blocks or []):
+                btxt = getattr(b, 'text', '').strip()
+                bbox = getattr(b, 'bbox', [0, 0, 0, 0])
+                if bbox[1] >= 450 and re.fullmatch(r'\d{2}\.\d{2}\.\d{4}', btxt):
+                    birth_date_val = btxt
+                    birth_date_box = bbox
+                    break
+            if not birth_date_val and mrz_birth_date:
+                birth_date_val = mrz_birth_date
+                birth_date_box = getattr(mrz2_block, 'bbox', None)
+
+        if birth_date_val:
             fields.append(
                 ExtractedFieldValue(
                     name="birth_date",
                     display_name="Дата рождения",
-                    value=birth_date,
+                    value=birth_date_val,
                     field_type="DATE",
-                    confidence=0.97,
-                    bbox=bbox,
-                    page=page
+                    confidence=0.98,
+                    bbox=birth_date_box,
+                    page=1
                 )
             )
-            birth_date_found = True
 
-        # Поиск в отдельных блоках OCR для даты рождения
-        if not birth_date_found:
-            for b in (ocr_blocks or []):
-                btxt = getattr(b, 'text', '')
-                if re.search(r'рожден|[ΔДд]ara', btxt, re.IGNORECASE):
-                    dm = re.search(r'(\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4})', btxt)
-                    if dm:
-                        birth_date = re.sub(r'\s+', '', dm.group(1))
-                        fields.append(
-                            ExtractedFieldValue(
-                                name="birth_date",
-                                display_name="Дата рождения",
-                                value=birth_date,
-                                field_type="DATE",
-                                confidence=0.98,
-                                bbox=getattr(b, 'bbox', None),
-                                page=getattr(b, 'page', 1)
-                            )
-                        )
-                        birth_date_found = True
-                        break
-
-        # Если не нашли по контексту, но нашли 2 даты: более ранняя — дата рождения, более поздняя — выдача
-        if len(all_dates) >= 2 and (not issue_date_found or not birth_date_found):
-            dates_sorted = sorted(all_dates, key=lambda x: (x[0][6:], x[0][3:5], x[0][:2]))
-            if not birth_date_found:
-                b_str, b_rd = dates_sorted[0]
-                bbox, page = find_field_bbox(b_str, ocr_blocks)
-                fields.append(
-                    ExtractedFieldValue(
-                        name="birth_date",
-                        display_name="Дата рождения",
-                        value=b_str,
-                        field_type="DATE",
-                        confidence=0.90,
-                        bbox=bbox,
-                        page=page
-                    )
-                )
-                birth_date_found = True
-            if not issue_date_found:
-                i_str, i_rd = dates_sorted[-1]
-                bbox, page = find_field_bbox(i_str, ocr_blocks)
-                fields.append(
-                    ExtractedFieldValue(
-                        name="issue_date",
-                        display_name="Дата выдачи",
-                        value=i_str,
-                        field_type="DATE",
-                        confidence=0.90,
-                        bbox=bbox,
-                        page=page
-                    )
-                )
-                issue_date_found = True
-        elif len(all_dates) == 1 and not issue_date_found and not birth_date_found:
-            d_val, d_rd = all_dates[0]
-            year_int = int(d_val[6:])
-            bbox, page = find_field_bbox(d_val, ocr_blocks)
-            if year_int >= 2000:
-                fields.append(
-                    ExtractedFieldValue(
-                        name="issue_date",
-                        display_name="Дата выдачи",
-                        value=d_val,
-                        field_type="DATE",
-                        confidence=0.88,
-                        bbox=bbox,
-                        page=page
-                    )
-                )
-                issue_date_found = True
-            else:
-                fields.append(
-                    ExtractedFieldValue(
-                        name="birth_date",
-                        display_name="Дата рождения",
-                        value=d_val,
-                        field_type="DATE",
-                        confidence=0.88,
-                        bbox=bbox,
-                        page=page
-                    )
-                )
-                birth_date_found = True
-
-        # Если дата рождения всё ещё не найдена — извлекаем из MRZ line 2
-        if not birth_date_found and mrz_line2:
-            m2 = re.search(r'(\d{9,10})[A-Za-z0-9]{3}(\d{2})(\d{2})(\d{2})\d([MF])', mrz_line2)
-            if m2:
-                yy, mm, dd = m2.group(2), m2.group(3), m2.group(4)
-                century = "19" if int(yy) > 25 else "20"
-                b_date = f"{dd}.{mm}.{century}{yy}"
-                bbox, page = find_field_bbox(mrz_line2[:20], ocr_blocks)
-                fields.append(
-                    ExtractedFieldValue(
-                        name="birth_date",
-                        display_name="Дата рождения",
-                        value=b_date,
-                        field_type="DATE",
-                        confidence=0.95,
-                        bbox=bbox,
-                        page=page
-                    )
-                )
-                birth_date_found = True
-
-        # 4. Пол (Пол: МУЖ. / ЖЕН.)
+        # ---------------------------------------------------------
+        # 4. Пол (МУЖ. / ЖЕН.)
+        # ---------------------------------------------------------
+        gender_val = None
+        gender_box = None
         gender_match = re.search(r'(?:пол|sex)\s*[:\.]?\s*(муж(?:\.|ской)?|жен(?:\.|ский)?|m|f)\b', flat_text, re.IGNORECASE)
-        gender_found = False
         if gender_match:
             raw_g = gender_match.group(1).upper()
-            val_g = "МУЖ." if "МУЖ" in raw_g or raw_g == 'M' else "ЖЕН."
-            bbox, page = find_field_bbox(val_g[:3], ocr_blocks)
+            gender_val = "МУЖ." if "МУЖ" in raw_g or raw_g == 'M' else "ЖЕН."
+            gender_box, _ = find_field_bbox(gender_val[:3], ocr_blocks)
+        elif mrz_gender:
+            gender_val = mrz_gender
+            gender_box = getattr(mrz2_block, 'bbox', None)
+
+        if gender_val:
             fields.append(
                 ExtractedFieldValue(
                     name="gender",
                     display_name="Пол",
-                    value=val_g,
+                    value=gender_val,
                     field_type="TEXT",
-                    confidence=0.95,
-                    bbox=bbox,
-                    page=page
+                    confidence=0.97,
+                    bbox=gender_box,
+                    page=1
                 )
             )
-            gender_found = True
-        elif mrz_line2:
-            m2 = re.search(r'(\d{9,10})[A-Za-z0-9]{3}(\d{2})(\d{2})(\d{2})\d([MF])', mrz_line2)
-            if m2:
-                g_char = m2.group(5)
-                val_g = "ЖЕН." if g_char == 'F' else "МУЖ."
-                bbox, page = find_field_bbox(mrz_line2[:20], ocr_blocks)
-                fields.append(
-                    ExtractedFieldValue(
-                        name="gender",
-                        display_name="Пол",
-                        value=val_g,
-                        field_type="TEXT",
-                        confidence=0.96,
-                        bbox=bbox,
-                        page=page
-                    )
-                )
-                gender_found = True
 
-        # Пространственный поиск пола, если не найден по контексту
-        if not gender_found:
-            for b in (ocr_blocks or []):
-                txt = getattr(b, 'text', '').strip().upper()
-                bbox = getattr(b, 'bbox', [0, 0, 0, 0])
-                if 900 <= bbox[1] <= 1000 and bbox[0] < 500:
-                    if "МУЖ" in txt or txt == "M":
-                        fields.append(
-                            ExtractedFieldValue(
-                                name="gender",
-                                display_name="Пол",
-                                value="МУЖ.",
-                                field_type="TEXT",
-                                confidence=0.93,
-                                bbox=bbox,
-                                page=getattr(b, 'page', 1)
-                            )
-                        )
-                        gender_found = True
-                        break
-                    elif "ЖЕН" in txt or txt == "F":
-                        fields.append(
-                            ExtractedFieldValue(
-                                name="gender",
-                                display_name="Пол",
-                                value="ЖЕН.",
-                                field_type="TEXT",
-                                confidence=0.93,
-                                bbox=bbox,
-                                page=getattr(b, 'page', 1)
-                            )
-                        )
-                        gender_found = True
-                        break
-
+        # ---------------------------------------------------------
         # 5. ФИО (Фамилия, Имя, Отчество)
-        fio_found = False
+        # ---------------------------------------------------------
+        # Двусторонняя сверка VIZ (визуальной зоны) и MRZ (машиночитаемой зоны)
+        final_fio = None
+        final_fio_bbox = None
+        final_fio_conf = 0.95
+
+        # Попытка извлечения из визуальной зоны по меткам
         surname_m = re.search(r'фамилия\s*[:\.]?\s*([а-яё\-]+)', flat_text, re.IGNORECASE)
         name_m = re.search(r'имя\s*[:\.]?\s*([а-яё\-]+)', flat_text, re.IGNORECASE)
         patr_m = re.search(r'отчество\s*[:\.]?\s*([а-яё\-]+)', flat_text, re.IGNORECASE)
 
+        viz_fio = None
+        viz_bbox = None
         if surname_m and name_m:
             s = surname_m.group(1).upper()
             n = name_m.group(1).upper()
             p = patr_m.group(1).upper() if patr_m else ""
-            full_fio = f"{s} {n} {p}".strip()
-            bbox, page = find_field_bbox(s, ocr_blocks)
-            fields.append(
-                ExtractedFieldValue(
-                    name="fio",
-                    display_name="ФИО",
-                    value=full_fio,
-                    field_type="PERSON",
-                    confidence=0.95,
-                    bbox=bbox,
-                    page=page
-                )
-            )
-            fio_found = True
+            viz_fio = f"{s} {n} {p}".strip()
+            viz_bbox, _ = find_field_bbox(s, ocr_blocks)
 
-        # Пространственный поиск ФИО (на странице 3 паспорта РФ: Фамилия, Имя, Отчество идут сверху вниз)
-        if not fio_found:
+        # Если явных меток нет, собираем чистые кириллические блоки в зоне ФИО над датой рождения
+        if not viz_fio:
             fio_cands = []
+            max_fio_y = birth_date_box[1] if birth_date_box else 700
             for b in (ocr_blocks or []):
                 txt = getattr(b, 'text', '').strip()
                 bbox = getattr(b, 'bbox', [0, 0, 0, 0])
-                if 680 <= bbox[1] <= 930 and 350 <= bbox[0] <= 750:
-                    if re.fullmatch(r'[А-ЯЁ]{3,}', txt) and not re.search(r'паспорт|россия|федерация|рождения|место|жительства', txt, re.IGNORECASE):
-                        fio_cands.append(b)
-            fio_cands.sort(key=lambda b: getattr(b, 'bbox', [0, 0, 0, 0])[1])
+                if 450 <= bbox[1] < max_fio_y:
+                    if re.fullmatch(r'[А-ЯЁ]{3,}', txt) and not re.search(r'паспорт|россия|федерация|рождения|место|жительства|личный', txt, re.IGNORECASE):
+                        if b.confidence >= 0.70:
+                            fio_cands.append(b)
             if len(fio_cands) >= 2:
-                names = [getattr(b, 'text', '').strip() for b in fio_cands[:3]]
-                full_fio = " ".join(names)
-                comb_bbox = [
+                fio_cands.sort(key=lambda b: getattr(b, 'bbox', [0, 0, 0, 0])[1])
+                viz_fio = " ".join(getattr(b, 'text', '').strip() for b in fio_cands[:3])
+                viz_bbox = [
                     min(getattr(b, 'bbox', [0, 0, 0, 0])[0] for b in fio_cands[:3]),
                     min(getattr(b, 'bbox', [0, 0, 0, 0])[1] for b in fio_cands[:3]),
                     max(getattr(b, 'bbox', [0, 0, 0, 0])[2] for b in fio_cands[:3]),
                     max(getattr(b, 'bbox', [0, 0, 0, 0])[3] for b in fio_cands[:3])
                 ]
-                fields.append(
-                    ExtractedFieldValue(
-                        name="fio",
-                        display_name="ФИО",
-                        value=full_fio,
-                        field_type="PERSON",
-                        confidence=0.94,
-                        bbox=comb_bbox,
-                        page=getattr(fio_cands[0], 'page', 1)
-                    )
+
+        # Синтез и арбитраж между VIZ и MRZ
+        if mrz_fio:
+            # MRZ line 1 расшифрован по «модернизированному клеру»
+            final_fio = mrz_fio
+            final_fio_bbox = viz_bbox if viz_bbox else getattr(mrz1_block, 'bbox', None)
+            final_fio_conf = 0.99 if viz_fio and viz_fio == mrz_fio else 0.97
+        elif viz_fio:
+            final_fio = viz_fio
+            final_fio_bbox = viz_bbox
+            final_fio_conf = 0.94
+
+        if final_fio:
+            fields.append(
+                ExtractedFieldValue(
+                    name="fio",
+                    display_name="ФИО",
+                    value=final_fio,
+                    field_type="PERSON",
+                    confidence=final_fio_conf,
+                    bbox=final_fio_bbox,
+                    page=1
                 )
-                fio_found = True
+            )
 
-        # Извлечение ФИО из MRZ line 1 при отсутствии печатного распознавания
-        if not fio_found and mrz_line1:
-            m1 = re.search(r'P[<A-Za-z0-9]*RUS([A-Za-z0-9<]+)', mrz_line1)
-            if m1:
-                parts = [p for p in m1.group(1).split('<') if p]
-                if parts:
-                    def _translit_mrz(part: str) -> str:
-                        repl = {'9': 'D', '3': 'CH', '1': 'I', '0': 'O'}
-                        for k, v in repl.items():
-                            part = part.replace(k, v)
-                        m_map = {
-                            'SHCH': 'Щ', 'KH': 'Х', 'TS': 'Ц', 'CH': 'Ч', 'SH': 'Ш',
-                            'ZH': 'Ж', 'IU': 'Ю', 'IA': 'Я', 'IE': 'Е',
-                            'A': 'А', 'B': 'Б', 'V': 'В', 'G': 'Г', 'D': 'Д',
-                            'E': 'Е', 'Z': 'З', 'I': 'И', 'K': 'К', 'L': 'Л',
-                            'M': 'М', 'N': 'Н', 'O': 'О', 'P': 'П', 'R': 'Р',
-                            'S': 'С', 'T': 'Т', 'U': 'У', 'F': 'Ф', 'Y': 'Ы'
-                        }
-                        res_chars = []
-                        idx = 0
-                        while idx < len(part):
-                            matched = False
-                            for sz in (4, 2, 1):
-                                sub = part[idx:idx+sz]
-                                if sub in m_map:
-                                    res_chars.append(m_map[sub])
-                                    idx += sz
-                                    matched = True
-                                    break
-                            if not matched:
-                                res_chars.append(part[idx])
-                                idx += 1
-                        cyr_w = "".join(res_chars)
-                        if cyr_w.startswith("ДОНАЛД") or cyr_w == "ДОНАЛДД":
-                            cyr_w = "ДОНАЛЬД"
-                        return cyr_w
-
-                    fio_cyrillic = " ".join(_translit_mrz(p) for p in parts[:3])
-                    bbox, page = find_field_bbox(parts[0], ocr_blocks)
-                    fields.append(
-                        ExtractedFieldValue(
-                            name="fio",
-                            display_name="ФИО",
-                            value=fio_cyrillic,
-                            field_type="PERSON",
-                            confidence=0.96,
-                            bbox=bbox,
-                            page=page
-                        )
-                    )
-                    fio_found = True
-
+        # ---------------------------------------------------------
         # 6. Кем выдан (орган выдачи)
-        # Сначала пробуем собрать пространственные блоки органа выдачи (обычно 1-3 строки над "Дата выдачи")
-        auth_blocks = []
+        # ---------------------------------------------------------
+        # Многострочная сборка (Multi-Line Merging) с отсечением типографского мусора
+        auth_candidates = []
+        max_auth_y = issue_date_box[1] if issue_date_box else 300
+        min_auth_y = 130
+
+        # Стоп-слова и типографские заголовки бланка паспорта
+        anchor_stop_terms = [
+            "паспорт", "выдан", "восторт", "воспорт", "российская", "федерация",
+            "дата", "выдачи", "код", "подразделения", "личный", "подпись"
+        ]
+
         for b in (ocr_blocks or []):
             b_box = getattr(b, 'bbox', None)
             b_txt = getattr(b, 'text', '').strip()
-            if b_box and 100 <= b_box[1] <= 265 and b_box[0] >= 180 and b_box[2] <= 820:
-                if not re.search(r'\d{2}\.\d{2}\.\d{4}|\d{3}-\d{3}', b_txt) and not re.fullmatch(r'\d+', b_txt):
-                    if not re.search(r'паспорт\s*выдан|российская\s*федерация', b_txt, re.IGNORECASE):
-                        auth_blocks.append(b)
+            if not b_box or b.confidence < 0.60:
+                continue
 
-        if auth_blocks:
-            auth_blocks.sort(key=lambda b: getattr(b, 'bbox', [0, 0, 0, 0])[1])
-            auth_val = " ".join(getattr(b, 'text', '').strip() for b in auth_blocks)
-            auth_val = re.sub(r'\b\d{1,6}\b', '', auth_val).strip()
-            auth_val = re.sub(r'\s+', ' ', auth_val)
-            comb_bbox = [
-                min(getattr(b, 'bbox', [0, 0, 0, 0])[0] for b in auth_blocks),
-                min(getattr(b, 'bbox', [0, 0, 0, 0])[1] for b in auth_blocks),
-                max(getattr(b, 'bbox', [0, 0, 0, 0])[2] for b in auth_blocks),
-                max(getattr(b, 'bbox', [0, 0, 0, 0])[3] for b in auth_blocks)
+            # Должен находиться в верхней части страницы (над датой выдачи)
+            if min_auth_y <= b_box[1] <= max_auth_y + 15:
+                # Исключаем вертикальную колонку серии/номера на правом поле
+                if b_box[0] > 1050 or re.fullmatch(r'\d{1,6}', b_txt):
+                    continue
+                # Исключаем дату выдачи и код подразделения
+                if re.search(r'\d{2}\.\d{2}\.\d{4}|\d{3}-\d{3}', b_txt):
+                    continue
+
+                # Проверка на совпадение со стоп-метками типографики бланка
+                is_anchor = any(term in b_txt.lower() for term in anchor_stop_terms)
+                if is_anchor and len(b_txt.split()) <= 2:
+                    continue
+
+                auth_candidates.append(b)
+
+        assembled_raw = ""
+        issued_bbox = None
+        if auth_candidates:
+            # Топологическая сортировка: сверху вниз, слева направо
+            auth_candidates.sort(key=lambda b: (b.bbox[1], b.bbox[0]))
+            assembled_raw = " ".join(b.text.strip() for b in auth_candidates)
+            issued_bbox = [
+                min(b.bbox[0] for b in auth_candidates),
+                min(b.bbox[1] for b in auth_candidates),
+                max(b.bbox[2] for b in auth_candidates),
+                max(b.bbox[3] for b in auth_candidates)
             ]
+
+        # Валидация и восстановление наименования через справочник подразделений МВД/ФМС
+        refined_issued_by, issued_conf = validate_and_refine_issued_by(assembled_raw, subdivision_code_val)
+
+        if refined_issued_by:
             fields.append(
                 ExtractedFieldValue(
                     name="issued_by",
                     display_name="Кем выдан",
-                    value=auth_val[:150],
+                    value=refined_issued_by,
                     field_type="ORGANIZATION",
-                    confidence=0.92,
-                    bbox=comb_bbox,
-                    page=getattr(auth_blocks[0], 'page', 1)
+                    confidence=issued_conf,
+                    bbox=issued_bbox if issued_bbox else issue_date_box,
+                    page=1
                 )
             )
-        else:
-            issued_m = re.search(
-                r'(?:паспорт\s*выдан|выдан)\s*[:\.]?\s*(.+?)(?=(?:дата\s*вы[дл]ачи|код\s*подразделени[яе]|\d{2}\s*\.\s*\d{2}\s*\.\s*\d{4}|\d{3}\s*[-—–]\s*\d{3}|$))',
-                flat_text,
-                re.IGNORECASE
-            )
-            if issued_m:
-                issued_by_val = issued_m.group(1).strip()
-                issued_by_val = re.sub(r'(?:дата\s*вы[дл]ачи|код\s*подразделени[яе]).*$', '', issued_by_val, flags=re.IGNORECASE).strip()
-                issued_by_val = re.sub(r'\b\d{1,6}\b', '', issued_by_val)
-                issued_by_val = re.sub(r'[\r\n\s]+', ' ', issued_by_val).strip()
-                if len(issued_by_val) >= 5:
-                    bbox, page = find_field_bbox(issued_by_val[:20], ocr_blocks)
-                    fields.append(
-                        ExtractedFieldValue(
-                            name="issued_by",
-                            display_name="Кем выдан",
-                            value=issued_by_val[:150],
-                            field_type="ORGANIZATION",
-                            confidence=0.90,
-                            bbox=bbox,
-                            page=page
-                        )
-                    )
 
         return fields

@@ -231,10 +231,14 @@ async def analyze_document(file: UploadFile = File(...)):
         tables=extracted_tables
     )
 
-    # 6. Расчёт итоговой уверенности (Overall Confidence)
+    # 6. Расчёт итоговой уверенности (Overall Confidence с мультипликативным штрафным вентилем)
     if extracted_fields:
         avg_fields_conf = sum(f.confidence for f in extracted_fields) / len(extracted_fields)
-        overall_conf = 0.35 * avg_ocr_conf + 0.35 * class_result.confidence + 0.30 * avg_fields_conf
+        base_conf = 0.35 * avg_ocr_conf + 0.25 * class_result.confidence + 0.40 * avg_fields_conf
+        
+        # Штрафной вентиль: итоговая оценка не может маскировать низкое качество ключевых полей
+        min_field_conf = min(f.confidence for f in extracted_fields)
+        overall_conf = min(base_conf, min_field_conf + 0.15)
     elif all_ocr_results:
         overall_conf = 0.50 * avg_ocr_conf + 0.50 * class_result.confidence
     else:

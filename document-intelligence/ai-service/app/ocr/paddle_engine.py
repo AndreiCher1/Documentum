@@ -194,7 +194,20 @@ class PaddleOcrEngine(BaseOcrEngine):
         # Улучшение перевёрнутых и вертикальных надписей (проверка поворотов 90°/270°/180° для совпадений < 75%)
         blocks = self._refine_orientations(image, blocks)
 
-        logger.info(f"Распознано {len(blocks)} текстовых фрагментов на странице {page_num}.")
+        # Отсечение остаточного оптического шума (drop_score < 0.45)
+        clean_blocks = []
+        for b in blocks:
+            c_text = b.text.strip()
+            if not c_text:
+                continue
+            if b.confidence < 0.45:
+                continue
+            if len(c_text) == 1 and not c_text.isalnum():
+                continue
+            clean_blocks.append(b)
+        blocks = clean_blocks
+
+        logger.info(f"Распознано {len(blocks)} валидных текстовых фрагментов на странице {page_num}.")
         return blocks
 
     def _refine_orientations(self, image: np.ndarray, blocks: List[OcrBlock]) -> List[OcrBlock]:
