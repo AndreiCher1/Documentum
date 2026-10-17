@@ -1656,27 +1656,46 @@ svg {
     overflow: auto;
     display: flex;
     align-items: flex-start;
-    justify-content: center;
     padding: 24px;
     position: relative;
     background: #E2E8F0;
 }
 
+.viewer-scroll-canvas.can-drag {
+    cursor: grab;
+}
+
+.viewer-scroll-canvas.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+}
+
 .scan-artboard-wrapper {
     position: relative;
     background: #FFFFFF;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    display: inline-block;
-    transition: transform 0.1s ease-out;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    margin: 0 auto;
+    flex-shrink: 0;
+    transition: width 0.12s cubic-bezier(0.2, 0, 0, 1);
     transform-origin: top center;
 }
 
 .scan-artboard-wrapper img {
     display: block;
-    max-width: 100%;
+    width: 100%;
     height: auto;
+    max-width: none;
     user-select: none;
     -webkit-user-drag: none;
+}
+
+/* Layer toggles */
+.scan-artboard-wrapper.hide-fields .ocr-box.field-box {
+    display: none !important;
+}
+
+.scan-artboard-wrapper.hide-ocr .ocr-box:not(.field-box) {
+    display: none !important;
 }
 
 /* Bounding Boxes Layer */

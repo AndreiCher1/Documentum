@@ -1570,7 +1570,13 @@ const App = {
             btnZoomOut.onclick = () => this.changeZoom(-0.15);
         }
         if (btnZoomReset) {
-            btnZoomReset.onclick = () => this.setZoom(1.0);
+            btnZoomReset.onclick = () => {
+                this.setZoom(1.0);
+                if (container) {
+                    container.scrollLeft = 0;
+                    container.scrollTop = 0;
+                }
+            };
         }
         if (btnZoomFit) {
             btnZoomFit.onclick = () => this.fitViewer();
@@ -1613,7 +1619,7 @@ const App = {
 
             container.addEventListener('mousedown', (e) => {
                 // Если кликнули по кнопкам или тегу поля — не запускаем drag
-                if (e.target.closest('.btn-tool') || e.target.closest('.field-box-tag')) return;
+                if (e.target.closest('.btn-tool') || e.target.closest('.field-box-tag') || e.target.closest('.ocr-box') || e.target.closest('.field-box')) return;
 
                 isPanning = true;
                 startX = e.clientX;
@@ -1652,25 +1658,85 @@ const App = {
     },
 
     setZoom(scale) {
+        const container = document.getElementById('viewer-container');
+        const prevScale = this.viewerZoom.scale || 1.0;
         this.viewerZoom.scale = scale;
-        const wrapper = document.getElementById('scan-wrapper');
+
         const badge = document.getElementById('zoom-level-badge');
         if (badge) {
             badge.textContent = `${Math.round(scale * 100)}%`;
         }
-        if (wrapper && this.viewerZoom.naturalWidth > 0) {
-            wrapper.style.width = `${Math.round(this.viewerZoom.naturalWidth * scale)}px`;
+
+        const wrapper = document.getElementById('scan-wrapper');
+        const img = document.getElementById('scan-img');
+        if (!wrapper) return;
+
+        // Определяем эталонную естественную ширину изображения
+        let natW = this.viewerZoom.naturalWidth;
+        let natH = this.viewerZoom.naturalHeight;
+        if ((!natW || natW <= 0) && img && img.naturalWidth > 0) {
+            natW = img.naturalWidth;
+            natH = img.naturalHeight;
+            this.viewerZoom.naturalWidth = natW;
+            this.viewerZoom.naturalHeight = natH;
+        }
+
+        if ((!natW || natW <= 0) && this.currentAnalysisData && this.currentAnalysisData.quality) {
+            natW = this.currentAnalysisData.quality.width || 0;
+            natH = this.currentAnalysisData.quality.height || 0;
+            if (natW > 0) {
+                this.viewerZoom.naturalWidth = natW;
+                this.viewerZoom.naturalHeight = natH;
+            }
+        }
+
+        if (natW > 0) {
+            const targetWidth = Math.round(natW * scale);
+            wrapper.style.width = `${targetWidth}px`;
+            wrapper.style.minWidth = `${targetWidth}px`;
+            wrapper.style.maxWidth = `${targetWidth}px`;
+
+            // Плавное центрирование точки обзора при зуме
+            if (container && prevScale > 0 && prevScale !== scale && container.clientWidth > 0) {
+                const ratio = scale / prevScale;
+                const centerX = container.scrollLeft + container.clientWidth / 2;
+                const centerY = container.scrollTop + container.clientHeight / 2;
+                container.scrollLeft = Math.max(0, Math.round(centerX * ratio - container.clientWidth / 2));
+                container.scrollTop = Math.max(0, Math.round(centerY * ratio - container.clientHeight / 2));
+            }
         }
     },
 
     fitViewer() {
         const container = document.getElementById('viewer-container');
-        if (!container || this.viewerZoom.naturalWidth <= 0) return;
+        if (!container) return;
 
+        const img = document.getElementById('scan-img');
+        let natW = this.viewerZoom.naturalWidth;
+        if ((!natW || natW <= 0) && img && img.naturalWidth > 0) {
+            natW = img.naturalWidth;
+            this.viewerZoom.naturalWidth = natW;
+            this.viewerZoom.naturalHeight = img.naturalHeight;
+        }
+        if ((!natW || natW <= 0) && this.currentAnalysisData && this.currentAnalysisData.quality) {
+            natW = this.currentAnalysisData.quality.width || 0;
+            if (natW > 0) {
+                this.viewerZoom.naturalWidth = natW;
+                this.viewerZoom.naturalHeight = this.currentAnalysisData.quality.height || 0;
+            }
+        }
+
+        if (!natW || natW <= 0) return;
+
+        // Вычитаем padding контейнера (24px с каждой стороны = 48px)
         const availWidth = container.clientWidth - 48;
         if (availWidth <= 0) return;
-        const scale = availWidth / this.viewerZoom.naturalWidth;
-        this.setZoom(Math.max(0.1, Math.min(5.0, Math.round(scale * 100) / 100)));
+
+        const scale = availWidth / natW;
+        const targetScale = Math.max(0.1, Math.min(5.0, Math.round(scale * 100) / 100));
+        this.setZoom(targetScale);
+        container.scrollLeft = 0;
+        container.scrollTop = 0;
     },
 
     /**
@@ -1696,6 +1762,7 @@ const App = {
                 if (this.currentAnalysisData) {
                     this.renderPageBboxes(this.currentAnalysisData);
                 }
+                this.setZoom(this.viewerZoom.scale);
             };
 
             if (img.complete && img.naturalWidth > 0) {
@@ -1711,6 +1778,9 @@ const App = {
         this.currentPage = 1;
         this.totalPages = 1;
         this.currentAnalysisData = null;
+        this.viewerZoom.naturalWidth = 0;
+        this.viewerZoom.naturalHeight = 0;
+        this.viewerZoom.scale = 1.0;
 
         const modal = document.getElementById('analysis-modal');
         const titleEl = document.getElementById('modal-doc-title');
@@ -1813,7 +1883,7 @@ const App = {
                 this.viewerZoom.naturalHeight = img.naturalHeight;
                 const infoEl = document.getElementById('modal-viewer-info');
                 if (infoEl) infoEl.textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
-                this.fitViewer();
+                requestAnimationFrame(() => this.fitViewer());
             };
 
             if (img.complete && img.naturalWidth > 0) {
@@ -2370,8 +2440,9 @@ const App = {
         // Удаляем предыдущие пульсирующие подсветки
         overlay.querySelectorAll('.bbox-pulse-highlight').forEach(el => el.remove());
 
-        const docWidth = img.naturalWidth || 1000;
-        const docHeight = img.naturalHeight || 1000;
+        const q = (this.currentAnalysisData && this.currentAnalysisData.quality) || {};
+        const docWidth = (q.width && q.width > 0) ? q.width : (this.viewerZoom.naturalWidth || img.naturalWidth || 1000);
+        const docHeight = (q.height && q.height > 0) ? q.height : (this.viewerZoom.naturalHeight || img.naturalHeight || 1000);
 
         const [x1, y1, x2, y2] = parsedBbox;
         const leftPct = (x1 / docWidth) * 100;
@@ -2680,8 +2751,9 @@ const App = {
         // Удаляем предыдущие пульсирующие подсветки
         overlay.querySelectorAll('.bbox-pulse-highlight').forEach(el => el.remove());
 
-        const docWidth = img.naturalWidth || 1000;
-        const docHeight = img.naturalHeight || 1000;
+        const q = (this.currentAnalysisData && this.currentAnalysisData.quality) || {};
+        const docWidth = (q.width && q.width > 0) ? q.width : (this.viewerZoom.naturalWidth || img.naturalWidth || 1000);
+        const docHeight = (q.height && q.height > 0) ? q.height : (this.viewerZoom.naturalHeight || img.naturalHeight || 1000);
 
         const [x1, y1, x2, y2] = bbox;
         const leftPct = (x1 / docWidth) * 100;
