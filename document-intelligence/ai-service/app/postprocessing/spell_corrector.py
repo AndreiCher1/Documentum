@@ -162,7 +162,6 @@ def restore_monetary_commas(text: str) -> str:
 
     # 3. Число из 1-6 цифр пробел 2 цифры в изолированном блоке ячейки (например '81 36' -> '81,36')
     text = re.sub(r'^\s*(\d{1,6})\s+(\d{2})\s*$', r'\1,\2', text)
-    text = re.sub(r'^\s*(\d{2})(\d{2})\s*$', r'\1,\2', text)
 
     return text
 

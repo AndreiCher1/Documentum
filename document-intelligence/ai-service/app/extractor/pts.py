@@ -26,7 +26,13 @@
 
 import re
 from typing import Any, List, Optional
-from app.extractor.base import BaseFieldExtractor, ExtractedFieldValue, find_field_bbox
+from app.extractor.base import (
+    BaseFieldExtractor,
+    ExtractedFieldValue,
+    find_field_bbox,
+    find_spatial_field,
+    normalize_vin
+)
 
 
 class PtsExtractor(BaseFieldExtractor):
@@ -34,10 +40,10 @@ class PtsExtractor(BaseFieldExtractor):
 
     def extract(self, text: str, ocr_blocks: Optional[List[Any]] = None) -> List[ExtractedFieldValue]:
         fields: List[ExtractedFieldValue] = []
-        if not text:
+        if not text and not ocr_blocks:
             return fields
 
-        flat_text = " ".join(text.split())
+        flat_text = " ".join(text.split()) if text else ""
 
         # 1. Серия и номер ПТС (формат: 2 цифры + 2 русские буквы + 6 цифр, например 77 УО 817676)
         series_m = re.search(r'\b(\d{2}\s*[А-Яа-яA-Za-z]{2}\s*\d{6})\b', flat_text)
@@ -56,43 +62,59 @@ class PtsExtractor(BaseFieldExtractor):
                 )
             )
 
-        # 2. VIN номер (17 символов, буквы и цифры без I, O, Q)
-        vin_m = re.search(r'(?:vin|идентификационный\s*номер(?:\s*\(vin\))?)\s*[:\.]?\s*([A-HJ-NPR-Z0-9]{17})\b', flat_text, re.IGNORECASE)
-        if not vin_m:
-            # Поиск любого 17-значного буквенно-цифрового кода
-            vin_m = re.search(r'\b([A-HJ-NPR-Z0-9]{17})\b', flat_text)
-        if vin_m:
-            vin_val = vin_m.group(1).upper()
-            bbox, page = find_field_bbox(vin_val, ocr_blocks)
+        # 2. VIN номер (17 символов с нормализацией O->0, Q->0, I->1)
+        v_raw, v_bbox, v_page = find_spatial_field(
+            r'идентификацион\w*\s*номер|(?:\b|\()vin(?:\b|\))',
+            ocr_blocks,
+            value_filter=lambda v: len(re.sub(r'[^A-Za-z0-9]', '', v)) >= 14
+        )
+        vin_norm = normalize_vin(v_raw) if v_raw else None
+        if not vin_norm:
+            for cand in re.findall(r'\b([A-Za-z0-9]{17})\b', flat_text):
+                norm = normalize_vin(cand)
+                if norm:
+                    vin_norm = norm
+                    v_bbox, v_page = find_field_bbox(cand, ocr_blocks)
+                    break
+        if vin_norm:
             fields.append(
                 ExtractedFieldValue(
                     name="vin",
                     display_name="Идентификационный номер (VIN)",
-                    value=vin_val,
+                    value=vin_norm,
                     field_type="VIN",
                     confidence=0.98,
-                    bbox=bbox,
-                    page=page
+                    bbox=v_bbox,
+                    page=v_page
                 )
             )
 
         # 3. Марка, модель ТС
-        model_m = re.search(r'2\.\s*Марка,?\s*модель(?:\s*ТС)?\s*[:\.]?\s*([A-Za-zА-Яа-я0-9\s\-]+?)(?=\s*3\.|\s*Наименование|\s*Категория|$)', flat_text, re.IGNORECASE)
-        if model_m:
-            model_val = model_m.group(1).strip()
-            if len(model_val) >= 2 and not model_val.isdigit():
-                bbox, page = find_field_bbox(model_val, ocr_blocks)
-                fields.append(
-                    ExtractedFieldValue(
-                        name="vehicle_model",
-                        display_name="Марка, модель ТС",
-                        value=model_val,
-                        field_type="TEXT",
-                        confidence=0.94,
-                        bbox=bbox,
-                        page=page
-                    )
+        m_val, m_bbox, m_page = find_spatial_field(
+            r'2\.\s*марка,?\s*модель|марка,?\s*модель(?:\s*тс)?',
+            ocr_blocks,
+            value_filter=lambda v: len(v) >= 2 and not v.isdigit()
+        )
+        if not m_val:
+            model_m = re.search(r'2\.\s*Марка,?\s*модель(?:\s*ТС)?\s*[:\.]?\s*([A-Za-zА-Яа-я0-9\s\-]+?)(?=\s*3\.|\s*Наименование|\s*Категория|$)', flat_text, re.IGNORECASE)
+            if model_m:
+                candidate = model_m.group(1).strip()
+                if len(candidate) >= 2 and not candidate.isdigit():
+                    m_val = candidate
+                    m_bbox, m_page = find_field_bbox(candidate, ocr_blocks)
+
+        if m_val:
+            fields.append(
+                ExtractedFieldValue(
+                    name="vehicle_model",
+                    display_name="Марка, модель ТС",
+                    value=m_val.strip(),
+                    field_type="TEXT",
+                    confidence=0.94,
+                    bbox=m_bbox,
+                    page=m_page
                 )
+            )
 
         # 4. Категория ТС (A, B, C, D, прицеп)
         cat_m = re.search(r'4\.\s*Категория(?:\s*ТС)?\s*[:\.]?\s*([A-Da-dА-Ва-в])\b', flat_text, re.IGNORECASE)
