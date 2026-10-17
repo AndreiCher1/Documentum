@@ -1,7 +1,7 @@
 {
-  "name": "document-intelligence",
+  "name": "documentum",
   "version": "0.1.0",
-  "description": "Интеллектуальная система анализа и структурирования документов",
+  "description": "Documentum — Интеллектуальная система анализа и структурирования документов",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",

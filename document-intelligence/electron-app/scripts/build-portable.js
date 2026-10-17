@@ -60,13 +60,13 @@ copyDirSync(ELECTRON_DIST_DIR, TARGET_PORTABLE_DIR, ['default_app.asar']);
 
 // 3. Переименование исполняемого файла
 const oldExe = path.join(TARGET_PORTABLE_DIR, 'electron.exe');
-const newExe = path.join(TARGET_PORTABLE_DIR, 'DocIntel-UI.exe');
+const newExe = path.join(TARGET_PORTABLE_DIR, 'Documentum-UI.exe');
 if (fs.existsSync(oldExe)) {
     if (fs.existsSync(newExe)) {
         try { fs.unlinkSync(newExe); } catch (e) {}
     }
     fs.renameSync(oldExe, newExe);
-    console.log('[OK] Создан исполняемый файл: DocIntel-UI.exe');
+    console.log('[OK] Создан исполняемый файл: Documentum-UI.exe');
 }
 
 // 4. Копирование кода приложения в resources/app
@@ -93,6 +93,6 @@ console.log('');
 console.log('======================================================================');
 console.log('       [УСПЕХ] Портативная сборка успешно создана!');
 console.log(`       Расположение: ${TARGET_PORTABLE_DIR}`);
-console.log('       Запуск:       DocIntel-UI.exe (не требует Node.js и npm)');
+console.log('       Запуск:       Documentum-UI.exe (не требует Node.js и npm)');
 console.log('======================================================================');
 

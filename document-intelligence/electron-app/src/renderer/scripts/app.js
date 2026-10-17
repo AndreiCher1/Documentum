@@ -69,7 +69,7 @@ const App = {
             this.notifications = [
                 {
                     id: 'welcome-1',
-                    title: 'Система DocIntel готова к работе',
+                    title: 'Система Documentum готова к работе',
                     desc: 'Подключены модули классификации, OCR и семантического поиска.',
                     type: 'info',
                     docId: null,

@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
 
-namespace DocIntel
+namespace Documentum
 {
     static class Program
     {
@@ -53,7 +53,7 @@ namespace DocIntel
 
         public static void StopAllServices()
         {
-            LauncherOrchestrator.Log("Stopping all DocIntel services...");
+            LauncherOrchestrator.Log("Остановка служб Documentum...");
             if (LauncherOrchestrator.StartedAiProcess != null)
             {
                 try { LauncherOrchestrator.StartedAiProcess.Kill(); } catch { }
@@ -65,6 +65,7 @@ namespace DocIntel
 
             PortManager.KillProcessesOnPort(8000);
             PortManager.KillProcessesOnPort(8085);
+            PortManager.KillProcessByName("Documentum-UI");
             PortManager.KillProcessByName("DocIntel-UI");
         }
 
@@ -73,14 +74,14 @@ namespace DocIntel
             bool p8000 = PortManager.IsPortListening(8000);
             bool p8085 = PortManager.IsPortListening(8085);
             string msg = string.Format(
-                "DocIntel System Status:\n\n" +
+                "Documentum — Состояние системы:\n\n" +
                 "• Python AI Service (порт 8000): {0}\n" +
                 "• Java Backend API (порт 8085): {1}\n\n" +
-                "DocIntel root launcher: Готов к работе.",
+                "Documentum Launcher: Готов к работе.",
                 p8000 ? "ONLINE" : "OFFLINE",
                 p8085 ? "ONLINE" : "OFFLINE"
             );
-            MessageBox.Show(msg, "DocIntel Status", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(msg, "Documentum", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 
@@ -216,7 +217,7 @@ namespace DocIntel
 
             // Title
             lblTitle = new Label();
-            lblTitle.Text = "DocIntel";
+            lblTitle.Text = "Documentum";
             lblTitle.Font = new Font("Segoe UI", 21f, FontStyle.Bold);
             lblTitle.ForeColor = Color.FromArgb(248, 250, 252); // Slate-50
             lblTitle.Location = new Point(28, 24);
@@ -229,7 +230,7 @@ namespace DocIntel
             lblVersion.Font = new Font("Segoe UI", 8f, FontStyle.Bold);
             lblVersion.ForeColor = Color.FromArgb(56, 189, 248); // Sky-400
             lblVersion.BackColor = Color.FromArgb(15, 23, 42);   // Slate-900
-            lblVersion.Location = new Point(160, 34);
+            lblVersion.Location = new Point(216, 34);
             lblVersion.Padding = new Padding(4, 2, 4, 2);
             lblVersion.AutoSize = true;
             pnlCard.Controls.Add(lblVersion);
@@ -306,8 +307,8 @@ namespace DocIntel
                 this.Invoke(new Action(() =>
                 {
                     MessageBox.Show(
-                        "Ошибка при запуске DocIntel:\n\n" + ex.Message,
-                        "DocIntel Error",
+                        "Ошибка при запуске Documentum:\n\n" + ex.Message,
+                        "Documentum",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error
                     );
@@ -346,7 +347,7 @@ namespace DocIntel
 
         public static void Execute(SplashForm splash)
         {
-            Log("=== Starting DocIntel Orchestration ===");
+            Log("=== Starting Documentum Orchestration ===");
             string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\', '/');
             string docDir = Directory.Exists(Path.Combine(appDir, "document-intelligence"))
                 ? Path.Combine(appDir, "document-intelligence")
@@ -512,7 +513,7 @@ namespace DocIntel
                 "Python 3.10+ не найден на компьютере.\n\n" +
                 "Для работы сервиса распознавания документов установите Python с сайта python.org\n" +
                 "(Обязательно выберите галочку 'Add Python to PATH' при установке).",
-                "DocIntel - Требуется Python",
+                "Documentum — Требуется Python",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning
             );
@@ -618,8 +619,13 @@ namespace DocIntel
             }
             catch { }
 
-            // Priority 1: Portable Standalone Executable (DocIntel-UI.exe)
-            string portableExe = Path.Combine(portableDir, "DocIntel-UI.exe");
+            // Priority 1: Portable Standalone Executable (Documentum-UI.exe or DocIntel-UI.exe)
+            string portableExe = Path.Combine(portableDir, "Documentum-UI.exe");
+            if (!File.Exists(portableExe))
+            {
+                portableExe = Path.Combine(portableDir, "DocIntel-UI.exe");
+            }
+
             if (File.Exists(portableExe))
             {
                 Log("Starting portable UI: " + portableExe);
@@ -700,12 +706,13 @@ namespace DocIntel
             bool uiDetected = false;
             for (int i = 0; i < 24; i++)
             {
-                Process[] p1 = Process.GetProcessesByName("DocIntel-UI");
-                Process[] p2 = Process.GetProcessesByName("electron");
-                if (p1.Length > 0 || p2.Length > 0)
+                Process[] p1 = Process.GetProcessesByName("Documentum-UI");
+                Process[] p2 = Process.GetProcessesByName("DocIntel-UI");
+                Process[] p3 = Process.GetProcessesByName("electron");
+                if (p1.Length > 0 || p2.Length > 0 || p3.Length > 0)
                 {
                     uiDetected = true;
-                    Log(string.Format("UI process confirmed active (DocIntel-UI: {0}, electron: {1})", p1.Length, p2.Length));
+                    Log(string.Format("UI process confirmed active (Documentum-UI: {0}, DocIntel-UI: {1}, electron: {2})", p1.Length, p2.Length, p3.Length));
                     break;
                 }
                 Thread.Sleep(500);
@@ -716,7 +723,7 @@ namespace DocIntel
                 // Fallback for non-electron (e.g. Edge App mode or browser)
                 string procName = "";
                 try { procName = uiProcess.ProcessName.ToLowerInvariant(); } catch { }
-                if (procName != "docintel-ui" && procName != "electron")
+                if (procName != "documentum-ui" && procName != "docintel-ui" && procName != "electron")
                 {
                     Log("Waiting for non-electron process: " + procName);
                     try { uiProcess.WaitForExit(); } catch { }
@@ -730,10 +737,11 @@ namespace DocIntel
             while (true)
             {
                 Thread.Sleep(1000);
-                Process[] p1 = Process.GetProcessesByName("DocIntel-UI");
-                Process[] p2 = Process.GetProcessesByName("electron");
+                Process[] p1 = Process.GetProcessesByName("Documentum-UI");
+                Process[] p2 = Process.GetProcessesByName("DocIntel-UI");
+                Process[] p3 = Process.GetProcessesByName("electron");
 
-                if (p1.Length == 0 && p2.Length == 0)
+                if (p1.Length == 0 && p2.Length == 0 && p3.Length == 0)
                 {
                     emptyCount++;
                     if (emptyCount >= 3)

@@ -55,7 +55,7 @@ function createWindow() {
         height: 800,
         minWidth: 800,
         minHeight: 600,
-        title: 'Document Intelligence',
+        title: 'Documentum',
         webPreferences: {
             /**
              * preload — путь к скрипту-мосту.
