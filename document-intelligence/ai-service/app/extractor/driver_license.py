@@ -181,3 +181,4 @@ class DriverLicenseExtractor(BaseFieldExtractor):
             )
 
         return fields
+

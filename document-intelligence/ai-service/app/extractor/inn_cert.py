@@ -140,3 +140,4 @@ class InnCertificateExtractor(BaseFieldExtractor):
             )
 
         return fields
+

@@ -192,3 +192,4 @@ class BankStatementExtractor(BaseFieldExtractor):
                 )
 
         return fields
+

@@ -180,3 +180,4 @@ class CashReceiptExtractor(BaseFieldExtractor):
                 )
 
         return fields
+

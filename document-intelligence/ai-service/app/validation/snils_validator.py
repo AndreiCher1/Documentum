@@ -88,3 +88,4 @@ def validate_snils(snils_str: str) -> RuleResult:
             message=f"Неверное контрольное число СНИЛС (ожидалось: {expected_check:02d}, получено: {check_num:02d})",
             field_name="snils_number"
         )
+

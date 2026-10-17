@@ -156,3 +156,4 @@ class SnilsExtractor(BaseFieldExtractor):
             )
 
         return fields
+

@@ -1276,7 +1276,7 @@ const App = {
             resultsContainer.innerHTML = `
                 <div class="placeholder-box" style="padding: 40px; text-align: center;">
                     <div style="margin-bottom: 12px; color: var(--text-muted);">
-                        <svg style="width: 32px; height: 32px;"><use href="#icon-search"></use></svg>
+                        <svg style="width: 20px; height: 20px;"><use href="#icon-search"></use></svg>
                     </div>
                     <p style="font-weight: 500;">По вашему запросу ничего не найдено</p>
                     <p class="text-muted" style="font-size: 11.5px;">Попробуйте изменить поисковую фразу или сбросить фильтры</p>
@@ -1453,6 +1453,7 @@ const App = {
             btnExportCsv.addEventListener('click', () => {
                 if (this.currentAnalysisDocId) {
                     this.downloadFile(ApiClient.getDocumentExportCsvUrl(this.currentAnalysisDocId), `document_${this.currentAnalysisDocId}_export.csv`);
+                    this.showToast('Экспорт в CSV успешно начат', 'success');
                 }
             });
         }
@@ -1462,6 +1463,7 @@ const App = {
             btnExportJson.addEventListener('click', () => {
                 if (this.currentAnalysisDocId) {
                     this.downloadFile(ApiClient.getDocumentExportJsonUrl(this.currentAnalysisDocId), `document_${this.currentAnalysisDocId}_export.json`);
+                    this.showToast('JSON-файл успешно сохранён', 'success');
                 }
             });
         }
@@ -2548,7 +2550,7 @@ const App = {
             answersList.innerHTML = `
                 <div class="qa-empty-state" style="text-align: center; color: var(--text-muted); padding: 32px 10px;">
                     <div style="margin-bottom: 8px;">
-                        <svg style="width: 28px; height: 28px; color: var(--text-muted);"><use href="#icon-message-square"></use></svg>
+                        <svg style="width: 18px; height: 18px; color: var(--text-muted);"><use href="#icon-message-square"></use></svg>
                     </div>
                     <h4 style="font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Естественный диалог с документом</h4>
                     <p style="font-size: 11.5px; color: var(--text-muted);">Задайте любой вопрос на русском языке. AI найдёт точный ответ, процитирует источник и подсветит координаты на скане.</p>

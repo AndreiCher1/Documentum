@@ -793,9 +793,9 @@ svg {
 }
 
 .kpi-icon-pill {
-    width: 28px;
-    height: 28px;
-    border-radius: var(--radius-md);
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -804,8 +804,8 @@ svg {
 }
 
 .kpi-icon-pill svg {
-    width: 15px;
-    height: 15px;
+    width: 13px;
+    height: 13px;
 }
 
 .kpi-icon-pill.success {
@@ -1290,21 +1290,21 @@ svg {
     height: 14px;
 }
 
-/* Floating Bulk Actions Bar (Clean Enterprise Light Theme) */
+/* Floating Bulk Actions Bar (Unified Enterprise Theme) */
 .floating-bulk-bar {
     position: fixed;
-    bottom: 24px;
+    bottom: 20px;
     left: 50%;
     transform: translateX(-50%) translateY(20px);
-    background: #FFFFFF;
+    background: var(--surface);
     color: var(--text-primary);
     padding: 6px 14px;
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--border-strong);
-    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     z-index: 50;
     opacity: 0;
     visibility: hidden;
@@ -1394,9 +1394,9 @@ svg {
 }
 
 .drop-icon-circle {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-sm);
     background: var(--surface);
     border: 1px solid var(--border);
     display: flex;
@@ -1407,8 +1407,8 @@ svg {
 }
 
 .drop-icon-circle svg {
-    width: 22px;
-    height: 22px;
+    width: 16px;
+    height: 16px;
 }
 
 .drop-main-text {

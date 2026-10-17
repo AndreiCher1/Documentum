@@ -229,3 +229,4 @@ class StsExtractor(BaseFieldExtractor):
                 )
 
         return fields
+
