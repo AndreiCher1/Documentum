@@ -37,6 +37,22 @@ public class GlobalExceptionHandler {
                 .body(ErrorResponse.of(400, "Ошибка валидации файла", e.getMessage()));
     }
 
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadable(org.springframework.http.converter.HttpMessageNotReadableException e) {
+        logger.warn("Некорректное тело запроса: {}", e.getMostSpecificCause().getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ErrorResponse.of(400, "Некорректный запрос", "Тело запроса не удалось прочитать (ожидается JSON в UTF-8)"));
+    }
+
+    @ExceptionHandler(ConversionException.class)
+    public ResponseEntity<ErrorResponse> handleConversion(ConversionException e) {
+        logger.warn("Не удалось преобразовать документ: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ErrorResponse.of(422, "Не удалось открыть документ", e.getMessage()));
+    }
+
     @ExceptionHandler(DocumentNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleDocumentNotFound(DocumentNotFoundException e) {
         logger.warn("Документ не найден: {}", e.getMessage());

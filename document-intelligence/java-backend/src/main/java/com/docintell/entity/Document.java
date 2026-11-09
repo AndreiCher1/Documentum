@@ -63,8 +63,55 @@ public class Document {
     @JsonIgnore
     private List<AnalysisResult> analysisResults = new ArrayList<>();
 
+    /** Название документа для реестра (по умолчанию — из текста или имени файла). */
+    @Column(name = "title", length = 500)
+    private String title;
+
+    /** Черновик редактора — автосохранение между версиями. */
+    @Column(name = "draft_html", columnDefinition = "TEXT")
+    @JsonIgnore
+    private String draftHtml;
+
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnore
+    private List<DocumentVersion> versions = new ArrayList<>();
+
+    /** Последняя проверка по правилам: JSON с находками и счётчики для реестра. */
+    @Column(name = "check_json", columnDefinition = "TEXT")
+    @JsonIgnore
+    private String checkJson;
+
+    @Column(name = "check_critical")
+    private Integer checkCritical;
+
+    @Column(name = "check_warning")
+    private Integer checkWarning;
+
+    @Column(name = "check_info")
+    private Integer checkInfo;
+
+    @Column(name = "checked_at")
+    private LocalDateTime checkedAt;
+
     public Document() {
     }
+
+    public String getCheckJson() { return checkJson; }
+    public void setCheckJson(String checkJson) { this.checkJson = checkJson; }
+    public Integer getCheckCritical() { return checkCritical; }
+    public void setCheckCritical(Integer v) { this.checkCritical = v; }
+    public Integer getCheckWarning() { return checkWarning; }
+    public void setCheckWarning(Integer v) { this.checkWarning = v; }
+    public Integer getCheckInfo() { return checkInfo; }
+    public void setCheckInfo(Integer v) { this.checkInfo = v; }
+    public LocalDateTime getCheckedAt() { return checkedAt; }
+    public void setCheckedAt(LocalDateTime v) { this.checkedAt = v; }
+
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getDraftHtml() { return draftHtml; }
+    public void setDraftHtml(String draftHtml) { this.draftHtml = draftHtml; }
+    public List<DocumentVersion> getVersions() { return versions; }
 
     @PrePersist
     protected void onCreate() {

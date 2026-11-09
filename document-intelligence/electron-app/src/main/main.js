@@ -95,7 +95,11 @@ function createWindow() {
     });
 
     // Загружаем главную HTML-страницу
-    mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    // Новый интерфейс (v2). Старый интерфейс распознавания доступен с флагом --legacy.
+    const legacy = process.argv.includes('--legacy');
+    mainWindow.loadFile(legacy
+        ? path.join(__dirname, '..', 'renderer', 'index.html')
+        : path.join(__dirname, '..', 'renderer', 'v2', 'index.html'));
 
     // В режиме разработки открываем DevTools
     if (process.argv.includes('--dev')) {
@@ -118,6 +122,29 @@ function createWindow() {
         return { action: 'deny' };
     });
 }
+
+/**
+ * Экспорт документа в PDF: рендерим HTML в скрытом окне, печатаем в PDF (A4)
+ * и сохраняем туда, куда укажет пользователь.
+ */
+ipcMain.handle('export-pdf', async (_event, { html, name }) => {
+    const { dialog } = require('electron');
+    const fs = require('fs');
+    const win = new BrowserWindow({ show: false, webPreferences: { javascript: false } });
+    try {
+        await win.loadURL('data:text/html;charset=utf-8;base64,' + Buffer.from(String(html), 'utf8').toString('base64'));
+        const pdf = await win.webContents.printToPDF({ pageSize: 'A4', printBackground: false, preferCSSPageSize: true });
+        const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+            defaultPath: String(name || 'Документ.pdf'),
+            filters: [{ name: 'PDF', extensions: ['pdf'] }],
+        });
+        if (canceled || !filePath) return { ok: false };
+        fs.writeFileSync(filePath, pdf);
+        return { ok: true, path: filePath };
+    } finally {
+        win.destroy();
+    }
+});
 
 /**
  * app.whenReady() — ждём, когда Electron полностью инициализируется.

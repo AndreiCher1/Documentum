@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* http://localhost:*; frame-src 'self' about:;">
+  <title>Documentum</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="screens.css">
+</head>
+<body>
+  <!-- Набор иконок -->
+  <svg width="0" height="0" style="position:absolute">
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 21h4"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></symbol>
+    <symbol id="i-al" viewBox="0 0 24 24"><path d="M4 6h16M4 10h10M4 14h16M4 18h10"/></symbol>
+    <symbol id="i-ac" viewBox="0 0 24 24"><path d="M4 6h16M7 10h10M4 14h16M7 18h10"/></symbol>
+    <symbol id="i-aj" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" stroke-width="3"/></symbol>
+    <symbol id="i-olist" viewBox="0 0 24 24"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 5l1.5-1v5M4 14.5a1.5 1.5 0 0 1 3 0c0 1.5-3 2.5-3 4h3"/></symbol>
+    <symbol id="i-comment" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12 20 4l-6 16-3-7z"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+    <symbol id="i-cols" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+    <symbol id="i-panel-r" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-max" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-revert" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01" stroke-width="3"/></symbol>
+    <symbol id="i-table" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 4v16"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/></symbol>
+  </svg>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand"><svg class="i"><use href="#i-menu"/></svg></div>
+      <div class="brand-name">Documentum</div>
+      <nav class="crumbs" id="crumbs"></nav>
+      <div class="spacer"></div>
+      <label class="quick-search">
+        <svg class="i sm"><use href="#i-search"/></svg>
+        <input id="quick-search" placeholder="Быстрый поиск">
+        <span class="kbd">Ctrl K</span>
+      </label>
+      <button class="btn" data-open="import"><svg class="i sm"><use href="#i-upload"/></svg>Загрузить</button>
+      <button class="icon-btn" title="Уведомления" data-toast="3 новых уведомления: проверка договора № 124-А завершена"><svg class="i"><use href="#i-bell"/></svg><span class="dot-badge"></span></button>
+      <span class="ai-status" title="Локальная модель · расчёт на процессоре · 2,4 ГБ памяти"><span class="pulse"></span>ИИ готов</span>
+    </header>
+
+    <aside class="rail">
+      <button class="icon-btn" data-nav="overview" title="Обзор"><svg class="i"><use href="#i-home"/></svg></button>
+      <button class="icon-btn" data-nav="registry" title="Документы"><svg class="i"><use href="#i-file"/></svg></button>
+      <button class="icon-btn" data-nav="search" title="Поиск"><svg class="i"><use href="#i-search"/></svg></button>
+      <button class="icon-btn" data-nav="assistant" title="Ассистент"><svg class="i"><use href="#i-spark"/></svg></button>
+      <div class="grow"></div>
+      <button class="icon-btn" id="theme-toggle" title="Светлая / тёмная тема"><svg class="i"><use href="#i-moon"/></svg></button>
+      <button class="icon-btn" data-nav="settings" title="Настройки"><svg class="i"><use href="#i-settings"/></svg></button>
+    </aside>
+
+    <main class="main">
+      <!-- ============ Редактор ============ -->
+      <section class="screen" id="screen-editor">
+        <aside class="panel side-left">
+          <div class="panel-head">
+            <span class="panel-title">Документ</span>
+            <button class="icon-btn" id="collapse-left" title="Свернуть панель"><svg class="i sm"><use href="#i-left"/></svg></button>
+          </div>
+          <div class="tabs">
+            <button class="tab active" data-ltab="outline">Структура</button>
+            <button class="tab" data-ltab="card">Карточка</button>
+          </div>
+          <div class="scroll" id="left-body"></div>
+        </aside>
+
+        <section class="center">
+          <div class="doc-head">
+            <button class="icon-btn" id="expand-left" title="Показать панель" hidden><svg class="i sm"><use href="#i-panel"/></svg></button>
+            <span class="doc-title" id="doc-title" contenteditable="true" spellcheck="false"></span>
+            <span class="status-pill critical" id="doc-verdict"></span>
+            <span class="save-state" id="save-state"><svg class="i sm"><use href="#i-check"/></svg>Сохранено · версия 2</span>
+            <div class="spacer"></div>
+            <button class="btn ghost small" data-nav="versions"><svg class="i sm"><use href="#i-history"/></svg>История</button>
+            <button class="btn ghost small" data-open="export"><svg class="i sm"><use href="#i-download"/></svg>Экспорт</button>
+            <button class="icon-btn" id="expand-right" title="Показать панель проверки" hidden><svg class="i sm"><use href="#i-panel-r"/></svg></button>
+          </div>
+          <div class="toolbar" id="toolbar">
+            <button class="tb-btn" data-cmd="undo" title="Отменить (Ctrl+Z)"><svg class="i sm"><use href="#i-undo"/></svg></button>
+            <button class="tb-btn" data-cmd="redo" title="Повторить (Ctrl+Y)"><svg class="i sm"><use href="#i-redo"/></svg></button>
+            <span class="tb-sep"></span>
+            <select class="tb-select" data-cmd="formatBlock" title="Стиль абзаца">
+              <option value="p">Обычный</option><option value="h1">Заголовок 1</option><option value="h2">Заголовок 2</option>
+            </select>
+            <select class="tb-select" data-cmd="fontName" title="Шрифт">
+              <option>Times New Roman</option><option>Arial</option><option>Calibri</option>
+            </select>
+            <select class="tb-select" data-cmd="fontSize" title="Размер">
+              <option value="2">10</option><option value="3" selected>12</option><option value="4">14</option><option value="5">18</option>
+            </select>
+            <span class="tb-sep"></span>
+            <button class="tb-btn" data-cmd="bold" title="Жирный (Ctrl+B)">B</button>
+            <button class="tb-btn" data-cmd="italic" title="Курсив (Ctrl+I)"><i>I</i></button>
+            <button class="tb-btn" data-cmd="underline" title="Подчёркнутый (Ctrl+U)"><u>U</u></button>
+            <button class="tb-btn" data-cmd="strikeThrough" title="Зачёркнутый"><s>S</s></button>
+            <button class="tb-btn" data-cmd="foreColor" data-arg="#c0262d" title="Цвет текста"><span style="border-bottom:3px solid var(--critical);line-height:1">A</span></button>
+            <span class="tb-sep"></span>
+            <button class="tb-btn" data-cmd="justifyLeft" title="По левому краю"><svg class="i sm"><use href="#i-al"/></svg></button>
+            <button class="tb-btn" data-cmd="justifyCenter" title="По центру"><svg class="i sm"><use href="#i-ac"/></svg></button>
+            <button class="tb-btn" data-cmd="justifyFull" title="По ширине"><svg class="i sm"><use href="#i-aj"/></svg></button>
+            <button class="tb-btn" data-cmd="insertUnorderedList" title="Маркированный список"><svg class="i sm"><use href="#i-list"/></svg></button>
+            <button class="tb-btn" data-cmd="insertOrderedList" title="Нумерованный список"><svg class="i sm"><use href="#i-olist"/></svg></button>
+            <span class="tb-sep"></span>
+            <button class="tb-btn" id="add-comment" title="Комментарий к выделенному"><svg class="i sm"><use href="#i-comment"/></svg></button>
+            <button class="tb-btn" id="run-check" title="Проверить документ заново"><svg class="i sm"><use href="#i-shield"/></svg></button>
+            <div class="seg" id="view-mode" title="Как показывать правки">
+              <button data-view="markup" class="on">С правками</button>
+              <button data-view="final">Итог</button>
+              <button data-view="original">Оригинал</button>
+            </div>
+          </div>
+          <div class="canvas" id="canvas">
+            <div class="ruler"></div>
+            <div class="page-wrap" id="page-wrap">
+              <article class="page" id="page" contenteditable="true" spellcheck="false"></article>
+            </div>
+          </div>
+          <div class="zoom-bar">
+            <button class="icon-btn" id="zoom-out" title="Уменьшить"><svg class="i sm"><use href="#i-minus"/></svg></button>
+            <span id="zoom-val">100%</span>
+            <button class="icon-btn" id="zoom-in" title="Увеличить"><svg class="i sm"><use href="#i-plus"/></svg></button>
+          </div>
+          <div class="statusbar" id="statusbar"></div>
+        </section>
+
+        <aside class="panel side-right">
+          <div class="panel-head">
+            <span class="panel-title">Проверка и правки</span>
+            <button class="icon-btn" id="collapse-right" title="Скрыть панель"><svg class="i sm"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="tabs">
+            <button class="tab active" data-rtab="review">Правки<span class="count" id="cnt-review"></span></button>
+            <button class="tab" data-rtab="comments">Комментарии<span class="count" id="cnt-comments"></span></button>
+            <button class="tab" data-rtab="ask">Спросить ИИ</button>
+          </div>
+          <div id="rtab-review" class="mini-chat">
+            <div class="review-summary" id="review-summary"></div>
+            <div class="scroll"><div class="cards" id="cards"></div></div>
+            <div class="commit-bar" id="commit-bar" hidden>
+              <div class="row"><b id="commit-title"></b><span class="faint" style="font-size:12px">как коммит</span></div>
+              <textarea id="commit-msg" spellcheck="false"></textarea>
+              <button class="btn primary" id="commit-btn">Сохранить версию</button>
+            </div>
+          </div>
+          <div id="rtab-comments" class="mini-chat" hidden>
+            <div class="scroll"><div class="comments" id="comments"></div></div>
+          </div>
+          <div id="rtab-ask" class="mini-chat" hidden>
+            <div class="scroll"><div class="msgs" id="doc-msgs"></div></div>
+            <div class="suggest-list" id="doc-suggest"></div>
+            <div class="composer">
+              <textarea id="doc-input" rows="1" placeholder="Вопрос по этому документу…"></textarea>
+              <button class="send" id="doc-send" title="Отправить"><svg class="i sm"><use href="#i-send"/></svg></button>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <!-- ============ Ассистент ============ -->
+      <section class="screen" id="screen-assistant">
+        <aside class="panel history">
+          <div class="panel-head"><span class="panel-title">Ассистент</span>
+            <button class="icon-btn" id="new-chat" title="Новый вопрос"><svg class="i sm"><use href="#i-plus"/></svg></button></div>
+          <div class="scroll"><div class="history-list" id="history-list"></div></div>
+        </aside>
+        <section class="chat">
+          <div class="chat-scroll" id="chat-scroll"><div class="chat-inner" id="chat"></div></div>
+          <div class="chat-composer">
+            <div class="wrap">
+              <div class="scope-select">Искать в:
+                <span class="chip filter" id="scope-chip"><svg class="i sm"><use href="#i-folder"/></svg>Вся база · 23 документа</span>
+              </div>
+              <div class="composer">
+                <textarea id="chat-input" rows="1" placeholder="Спросите что угодно о документах: «утверждённые бюджеты», «договоры с Вектор Снаб»…"></textarea>
+                <button class="send" id="chat-send" title="Отправить"><svg class="i sm"><use href="#i-send"/></svg></button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ============ История версий ============ -->
+      <section class="screen" id="screen-versions">
+        <aside class="panel">
+          <div class="panel-head">
+            <span class="panel-title">История версий</span>
+            <button class="btn ghost small" data-nav="editor"><svg class="i sm"><use href="#i-left"/></svg>К документу</button>
+          </div>
+          <div class="scroll">
+            <div class="faint" style="padding:2px 16px 4px;font-size:12px">Клик — «стало», Shift+клик — «было»</div>
+            <div class="timeline" id="timeline"></div>
+            <div class="label" style="padding:4px 16px 6px">Сравнить с другим документом</div>
+            <div class="ext-docs" id="ext-docs"></div>
+          </div>
+        </aside>
+        <section class="compare">
+          <div class="compare-head">
+            <span class="ab a">БЫЛО</span><b id="cmp-a"></b>
+            <svg class="i sm faint"><use href="#i-arrow"/></svg>
+            <span class="ab b">СТАЛО</span><b id="cmp-b"></b>
+            <div class="spacer"></div>
+            <span class="nav-changes">
+              <button class="icon-btn" id="chg-prev" title="Предыдущее изменение"><svg class="i sm"><use href="#i-left"/></svg></button>
+              <span id="chg-pos"></span>
+              <button class="icon-btn" id="chg-next" title="Следующее изменение"><svg class="i sm"><use href="#i-right"/></svg></button>
+            </span>
+            <button class="btn small" id="revert-btn"><svg class="i sm"><use href="#i-revert"/></svg>Вернуть «было»</button>
+            <button class="btn small" data-toast="Протокол разногласий сформирован: Протокол_124-А.docx"><svg class="i sm"><use href="#i-table"/></svg>Протокол разногласий</button>
+          </div>
+          <div class="ai-summary" id="ai-summary"></div>
+          <div class="cols">
+            <div class="col"><div class="col-head"><span class="ab a">БЫЛО</span><span id="col-a-name"></span></div><div class="col-body" id="col-a"></div></div>
+            <div class="col"><div class="col-head"><span class="ab b">СТАЛО</span><span id="col-b-name"></span></div><div class="col-body" id="col-b"></div></div>
+          </div>
+        </section>
+      </section>
+
+      <!-- ============ Обзор, реестр, поиск, настройки (рисуются из screens.js) ============ -->
+      <section class="screen" id="screen-overview"><div class="scroll"><div class="ov" id="ov"></div></div></section>
+      <section class="screen" id="screen-registry"></section>
+      <section class="screen" id="screen-search"></section>
+      <section class="screen" id="screen-settings"></section>
+    </main>
+  </div>
+
+  <div class="modal-back" id="modal" hidden><div class="modal" id="modal-box"></div></div>
+  <div class="toasts" id="toasts"></div>
+
+  <script src="demo-data.js"></script>
+  <script src="demo-docs.js"></script>
+  <script src="app.js"></script>
+  <script src="real.js"></script>
+  <script src="screens.js"></script>
+</body>
+</html>
