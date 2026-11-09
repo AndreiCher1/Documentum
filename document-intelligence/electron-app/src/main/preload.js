@@ -22,7 +22,7 @@
  * в renderer, который содержит только разрешённые функции.
  */
 
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
     /**
@@ -33,5 +33,7 @@ contextBridge.exposeInMainWorld('api', {
     /**
      * Версия приложения.
      */
-    appVersion: '0.1.0'
+    appVersion: '0.1.0',
+    // Экспорт в PDF: главный процесс печатает HTML и показывает диалог сохранения
+    exportPdf: (html, name) => ipcRenderer.invoke('export-pdf', { html, name })
 });

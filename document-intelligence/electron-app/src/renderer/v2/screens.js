@@ -7,21 +7,26 @@
 // Экраны, которые рисуются при каждом открытии (вызываются из go() в app.js)
 const SCREENS = { overview: renderOverview, registry: renderRegistry, search: renderSearch, settings: renderSettings };
 
-const SEV_RANK = { critical: 3, warning: 2, info: 1, ok: 0 };
+const SEV_RANK = { critical: 3, warning: 2, info: 1, ok: 0, none: -1 };
 const parseDate = (s) => { const [d, m, y] = s.split('.').map(Number); return new Date(y, m - 1, d).getTime(); };
-const liveDocs = () => DEMO.docs.filter((d) => !d.deleted);
+// Документы из базы (real.js) + демонстрационные, если они включены в настройках
+const liveDocs = () => [...REAL.docs, ...(showDemo() ? DEMO.docs : [])].filter((d) => !d.deleted);
+const findDoc = (id) => REAL.docs.find((x) => x.id === id) || DEMO.docs.find((x) => x.id === id);
 
-// Для договора 124-А состояние проверки берём из редактора
+// Для договора 124-А состояние проверки берём из редактора; документы из базы пока не проверялись
 function issuesOf(d) {
+  if (!d.issues && d.id !== 'doc-124a') return [0, 0, 0];
   if (d.id !== 'doc-124a') return d.issues;
-  const p = pending();
+  const p = DEMO.findings.filter((f) => !ed.res[f.id]);
   return ['critical', 'warning', 'info'].map((s) => p.filter((f) => f.severity === s).length);
 }
 function sevOf(d) {
+  if (!d.issues && d.id !== 'doc-124a') return 'none';
   const [c, w, i] = issuesOf(d);
   return c ? 'critical' : w ? 'warning' : i ? 'info' : 'ok';
 }
 function checkLabel(d) {
+  if (sevOf(d) === 'none') return 'Не проверен';
   const [c, w, i] = issuesOf(d);
   if (c) return `${c} ${plural(c, 'критичная', 'критичных', 'критичных')}`;
   if (w) return `${w} ${plural(w, 'замечание', 'замечания', 'замечаний')}`;
@@ -29,8 +34,9 @@ function checkLabel(d) {
   return 'Без замечаний';
 }
 function issueText(d) {
+  if (d.real) return `Версия ${d.version} · исходный файл ${d.filename}`;
   if (d.id === 'doc-124a') {
-    const p = pending().filter((f) => f.severity === 'critical').map((f) => f.title.toLowerCase());
+    const p = DEMO.findings.filter((f) => !ed.res[f.id] && f.severity === 'critical').map((f) => f.title.toLowerCase());
     return p.length ? p.join(', ') : 'Критичных ошибок нет';
   }
   return d.issueText || '';
@@ -38,10 +44,11 @@ function issueText(d) {
 const sheet = (lines = 7) => `<div class="sheet"><i class="t"></i>${'<i></i>'.repeat(lines - 2)}<i class="s"></i></div>`;
 
 function openDoc(id) {
-  const d = DEMO.docs.find((x) => x.id === id);
+  const d = findDoc(id);
   if (!d) return;
-  if (d.open) { go('editor'); return; }
-  toast(`«${d.title}» откроется в редакторе. В демо-версии редактор показывает договор № 124-А.`, 'Открыть договор', () => go('editor'));
+  if (d.real) { openRealDoc(d.realId); return; }
+  if (d.open) { restoreDemo(); go('editor'); return; }
+  toast(`«${d.title}» — демонстрационный документ. В редакторе открываются договор № 124-А и документы, загруженные в базу.`, 'Открыть договор', () => { restoreDemo(); go('editor'); });
 }
 
 /* -------------------------------------------------------------------------
@@ -79,7 +86,8 @@ function renderOverview() {
   const maxT = Math.max(...typeRows.map((r) => r[1]));
   const maxE = Math.max(...DEMO.errorStats.map((r) => r[1]));
   const soon = DEMO.deadlines.filter((x) => /через (\d+)/.exec(x.left)[1] <= 30).length;
-  const recent = ['doc-124a', 'd23', 'd22', 'd11'].map((id) => DEMO.docs.find((d) => d.id === id));
+  const recent = [...REAL.docs, ...(showDemo() ? ['doc-124a', 'd23', 'd22', 'd11'].map((id) => DEMO.docs.find((d) => d.id === id)) : [])].slice(0, 4);
+  if (!REAL.loaded) refreshReal().then(() => { if ($('#screen-overview').classList.contains('active')) renderOverview(); });
 
   $('#ov').innerHTML = `
     <div><h1>Добрый день</h1><div class="muted">Вот что требует внимания в базе документов.</div></div>
@@ -91,7 +99,7 @@ function renderOverview() {
     <div class="tiles">
       <button class="tile" data-nav="registry"><span class="k">${icon('file')}Документов в базе</span><span class="v">${docs.length}</span><span class="s">+3 за неделю</span></button>
       <button class="tile critical" id="tile-crit"><span class="k">${icon('alert')}С критичными ошибками</span><span class="v">${crit.length}</span><span class="s">${crit.map((d) => d.title.split(' ').slice(0, 2).join(' ')).join(', ') || 'нет'}</span></button>
-      <button class="tile ai" data-nav="editor"><span class="k">${icon('check')}Правок ждут решения</span><span class="v">${pending().length}</span><span class="s">в договоре № 124-А</span></button>
+      <button class="tile ai" data-doc="doc-124a"><span class="k">${icon('check')}Правок ждут решения</span><span class="v">${DEMO.findings.filter((f) => !ed.res[f.id]).length}</span><span class="s">в договоре № 124-А</span></button>
       <button class="tile warning" id="tile-dl"><span class="k">${icon('history')}Сроки в ближайшие 30 дней</span><span class="v">${soon}</span><span class="s">ближайший — ${DEMO.deadlines[0].date}</span></button>
     </div>
     <div class="ov-grid">
@@ -127,8 +135,9 @@ const reg = { folder: 'all', q: '', type: '', status: '', cp: '', sort: 'date', 
 
 function regFiltered() {
   let list = reg.folder === 'trash' ? DEMO.docs.filter((d) => d.deleted) : liveDocs();
-  if (reg.folder === 'issues') list = list.filter((d) => sevOf(d) !== 'ok');
-  else if (reg.folder !== 'all' && reg.folder !== 'trash') list = list.filter((d) => d.folder === reg.folder);
+  if (reg.folder === 'real') list = REAL.docs;
+  if (reg.folder === 'issues') list = list.filter((d) => !['ok', 'none'].includes(sevOf(d)));
+  else if (!['all', 'trash', 'real'].includes(reg.folder)) list = list.filter((d) => d.folder === reg.folder);
   if (reg.type) list = list.filter((d) => d.type === reg.type);
   if (reg.status) list = list.filter((d) => d.status === reg.status);
   if (reg.cp) list = list.filter((d) => d.cp === reg.cp);
@@ -142,9 +151,10 @@ function regFiltered() {
 
 function renderRegistry() {
   crumbs(['Документы']);
+  if (!REAL.loaded) refreshReal().then(() => { if ($('#screen-registry').classList.contains('active')) renderRegistry(); });
   const scr = $('#screen-registry');
   const all = liveDocs();
-  const folderName = { all: 'Все документы', issues: 'С ошибками', trash: 'Корзина' }[reg.folder] || reg.folder;
+  const folderName = { all: 'Все документы', issues: 'С ошибками', trash: 'Корзина', real: 'Загруженные в базу' }[reg.folder] || reg.folder;
   const list = regFiltered();
   const opts = (field) => [...new Set(all.map((d) => d[field]).filter((v) => v && v !== '—'))].sort();
   const sel = (field, label) => `<select class="chip ${reg[field] ? 'set' : ''}" data-rf="${field}"><option value="">${label}</option>${opts(field === 'cp' ? 'cp' : field).map((v) => `<option ${reg[field] === v ? 'selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
@@ -156,7 +166,8 @@ function renderRegistry() {
     <aside class="panel folders">
       <div class="panel-head"><span class="panel-title">Документы</span><button class="icon-btn" title="Новая папка" data-toast="Папка «Новая папка» создана">${icon('plus')}</button></div>
       <div class="scroll"><div class="folder-list">
-        ${[['all', 'Все документы', all.length, 'file'], ['issues', 'С ошибками', all.filter((d) => sevOf(d) !== 'ok').length, 'alert']]
+        ${[['all', 'Все документы', all.length, 'file'], ['real', 'Загруженные в базу', REAL.docs.length, 'upload'],
+          ['issues', 'С ошибками', all.filter((d) => !['ok', 'none'].includes(sevOf(d))).length, 'alert']]
           .map(([k, n, c, ic]) => `<button class="folder ${reg.folder === k ? 'active' : ''}" data-folder="${k}">${icon(ic)}${n}<span class="c">${c}</span></button>`).join('')}
         <div class="label" style="padding:12px 10px 4px">Папки</div>
         ${DEMO.folders.map((f) => `<button class="folder ${reg.folder === f ? 'active' : ''}" data-folder="${esc(f)}">${icon('folder')}${esc(f)}<span class="c">${fcount(f)}</span></button>`).join('')}
@@ -183,7 +194,7 @@ function renderRegistry() {
         <button class="btn small ghost" id="bulk-del">${reg.folder === 'trash' ? 'Восстановить' : 'Удалить'}</button>
         <button class="icon-btn" id="bulk-clear" title="Снять выделение">${icon('x')}</button></div>` : ''}
     </section>
-    ${reg.focus ? regDrawer(DEMO.docs.find((d) => d.id === reg.focus)) : ''}`;
+    ${reg.focus ? regDrawer(findDoc(reg.focus)) : ''}`;
   bindRegistry(list);
 }
 
@@ -209,7 +220,7 @@ function regTiles(list) {
 
 function regDrawer(d) {
   if (!d) return '';
-  const related = d.id === 'doc-124a' ? ['d6', 'd7', 'd8'] : DEMO.docs.filter((x) => x.id !== d.id && x.cp === d.cp && d.cp !== '—').map((x) => x.id).slice(0, 3);
+  const related = d.real ? [] : d.id === 'doc-124a' ? ['d6', 'd7', 'd8'] : DEMO.docs.filter((x) => x.id !== d.id && x.cp === d.cp && d.cp !== '—').map((x) => x.id).slice(0, 3);
   const [c, w, i] = issuesOf(d);
   return `<aside class="panel drawer">
     <div class="panel-head"><span class="panel-title">Карточка</span><button class="icon-btn" id="drawer-close" title="Закрыть">${icon('x')}</button></div>
@@ -223,7 +234,7 @@ function regDrawer(d) {
       ${related.length ? `<div><div class="label" style="margin-bottom:6px">Связанные документы</div><div class="related" style="padding:0">
         ${related.map((id) => { const r = DEMO.docs.find((x) => x.id === id); return `<a href="#" data-focus="${id}">${icon('file')}${esc(r.title)}</a>`; }).join('')}</div></div>` : ''}
       <div style="display:grid;gap:8px">
-        <button class="btn primary" data-doc="${d.id}">${d.open ? 'Открыть в редакторе' : 'Открыть'}</button>
+        <button class="btn primary" data-doc="${d.id}">${d.open || d.real ? 'Открыть в редакторе' : 'Открыть'}</button>
         <button class="btn ai" data-ask-global="${esc('Кратко: ' + d.title)}">${icon('spark')}Спросить ИИ об этом документе</button>
       </div>
     </div></div></aside>`;
@@ -264,6 +275,8 @@ function bindRegistry(list) {
       $('#chat-input').focus();
     };
     $('#bulk-del').onclick = () => {
+      const realIds = [...reg.sel].filter((id) => findDoc(id)?.real);
+      if (realIds.length) { confirmDeleteReal(realIds); return; }
       const ids = [...reg.sel];
       const restore = reg.folder === 'trash';
       ids.forEach((id) => { DEMO.docs.find((d) => d.id === id).deleted = !restore; });
@@ -271,6 +284,29 @@ function bindRegistry(list) {
       if (!restore) toast(`Перемещено в корзину: ${ids.length}. Хранится 30 дней.`, 'Отменить', () => { ids.forEach((id) => { DEMO.docs.find((d) => d.id === id).deleted = false; }); renderRegistry(); });
     };
   }
+}
+
+// Документы в базе удаляются насовсем — поэтому спрашиваем подтверждение
+function confirmDeleteReal(ids) {
+  const docs = ids.map(findDoc);
+  openModal(`<div class="modal-head"><h2>Удалить ${docs.length} ${plural(docs.length, 'документ', 'документа', 'документов')}?</h2><button class="icon-btn" data-close>${icon('x')}</button></div>
+    <div class="modal-body"><div>Документы, их версии и исходные файлы будут удалены из базы без возможности восстановления:</div>
+      <ul style="margin:0;padding-left:20px">${docs.map((d) => `<li>${esc(d.title)}</li>`).join('')}</ul></div>
+    <div class="modal-foot"><div class="spacer"></div><button class="btn" data-close>Отмена</button><button class="btn primary" id="del-go" style="background:var(--critical);border-color:var(--critical);color:#fff">Удалить навсегда</button></div>`);
+  $('#del-go').onclick = async () => {
+    $('#del-go').disabled = true;
+    try {
+      for (const d of docs) await API.remove(d.realId);
+      if (ed.real && docs.some((d) => d.realId === ed.real.id)) restoreDemo();
+      toast(`Удалено: ${docs.length}`);
+    } catch (e) {
+      toast('Не удалось удалить: ' + e.message);
+    }
+    closeModal();
+    reg.sel.clear(); reg.focus = null;
+    await refreshReal();
+    renderRegistry();
+  };
 }
 
 /* =========================================================================
@@ -468,10 +504,13 @@ function settingsBody() {
         <div class="form-row"><label>Масштаб интерфейса</label><select><option>90 %</option><option selected>100 %</option><option>110 %</option><option>125 %</option></select></div>
         <div class="form-row"><label>Шрифт документа по умолчанию</label><select><option>Times New Roman</option><option>Arial</option><option>Calibri</option></select></div>
         <div class="form-row"><label>Размер шрифта</label><select><option>12</option><option>14</option></select></div></div>
+      <div class="box"><div class="rule-row" style="grid-template-columns:1fr 34px"><div>Показывать демонстрационные документы<div class="cat">23 примера для презентации: договоры, приказы, бюджеты. Загруженные вами документы показываются всегда.</div></div>
+        <label class="switch"><input type="checkbox" id="ui-demo" ${showDemo() ? 'checked' : ''}><span></span></label></div></div>
       <div class="box"><div class="box-head"><span>Горячие клавиши</span></div><div class="kv">
         ${[['Ctrl + K', 'Быстрый поиск'], ['Ctrl + J', 'Показать или скрыть панель правок'], ['Ctrl + S', 'Сохранить версию'], ['Ctrl + Z / Ctrl + Y', 'Отменить / повторить'], ['Ctrl + B / I / U', 'Жирный / курсив / подчёркнутый'], ['Esc', 'Закрыть окно']]
           .map(([k, v]) => `<span class="k"><span class="kbd">${k}</span></span><span>${v}</span>`).join('')}</div></div>`;
     default: return `<h1>О программе</h1><div class="lead">Documentum 0.2.0 · демонстрационная версия</div>
+      <div class="box"><div class="box-head"><span>Сервер документов</span></div><div class="kv" id="srv-status"><span class="k">Состояние</span><span>Проверяю…</span></div></div>
       <div class="box"><div class="box-head"><span>Состояние служб</span><button class="btn small ghost" data-toast="Журнал ошибок пуст">Журнал ошибок</button></div><div class="kv">
         ${[['Интерфейс', 'работает'], ['Сервер данных', 'работает · 127.0.0.1:8080'], ['AI-сервис', 'работает · 127.0.0.1:8000'], ['Языковая модель', 'загружена · профиль «Стандарт»'], ['Индекс поиска', '23 документа · обновлён 5 минут назад']]
           .map(([k, v]) => `<span class="k">${k}</span><span class="svc"><span class="sev-dot ok"></span>${v}</span>`).join('')}</div></div>
@@ -505,6 +544,10 @@ function bindSettings(scr) {
   }
   const bk = $('#backup-now', scr);
   if (bk) bk.onclick = async () => { bk.disabled = true; bk.textContent = 'Создаю копию…'; await sleep(1200); toast('Копия создана: D:\\Backup\\Documentum\\2025-11-09.zip (1,8 ГБ)'); renderSettings(); };
+  const demo = $('#ui-demo', scr);
+  if (demo) demo.onchange = () => { store.set('showDemo', demo.checked ? 'on' : 'off'); toast(demo.checked ? 'Демонстрационные документы показаны' : 'Демонстрационные документы скрыты'); };
+  const srv = $('#srv-status', scr);
+  if (srv) refreshReal().then(serverStatusHTML).then((h) => { srv.innerHTML = h; });
   const th = $('#ui-theme', scr);
   if (th) { th.value = document.documentElement.dataset.theme; th.onchange = () => setTheme(th.value); }
 }
@@ -537,7 +580,11 @@ function openImport() {
       <button class="btn" data-close>Закрыть</button><button class="btn primary" id="imp-open" disabled>Открыть в реестре</button></div>`);
   const drop = $('#drop');
   $('#pick').onclick = () => $('#file-in').click();
-  $('#file-in').onchange = (e) => addFiles([...e.target.files].map((f) => ({ name: f.name, size: f.size })));
+  $('#file-in').onchange = (e) => addFiles([...e.target.files].map((f) => ({ name: f.name, size: f.size, file: f })));
+  API.check().then((ok) => {
+    if (!importQueue.length) $('#imp-status').textContent = API.statusText();
+    if (!ok && API.outdated) toast('Сервер Documentum старой версии: загрузка в базу недоступна до обновления.');
+  });
   $('#demo-files').onclick = () => addFiles([
     { name: 'Договор_поставки_124-А_ред3.docx', size: 48210, dup: 'doc-124a' },
     { name: 'Акт_сверки_ВекторСнаб_ноябрь.pdf', size: 182300, link: 'doc-124a', type: 'Акт', issues: [0, 1, 0] },
@@ -545,8 +592,12 @@ function openImport() {
   ]);
   drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
   drop.ondragleave = () => drop.classList.remove('over');
-  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles([...e.dataTransfer.files].map((f) => ({ name: f.name, size: f.size }))); };
-  $('#imp-open').onclick = () => { closeModal(); Object.assign(reg, { folder: 'all', sort: 'date', focus: null }); go('registry'); };
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); addFiles([...e.dataTransfer.files].map((f) => ({ name: f.name, size: f.size, file: f }))); };
+  $('#imp-open').onclick = () => {
+    closeModal();
+    Object.assign(reg, { folder: importQueue.some((x) => x.realDoc) ? 'real' : 'all', sort: 'date', dir: -1, focus: null });
+    go('registry');
+  };
 }
 
 function addFiles(files) {
@@ -561,6 +612,17 @@ function addFiles(files) {
 }
 
 async function runImport(item) {
+  if (item.file) {
+    // Настоящий файл никогда не «загружаем понарошку»: либо в базу, либо честная причина
+    if (API.online === null) await API.check();
+    if (API.online) { realImport(item); return; }
+    item.error = API.outdated
+      ? 'Файл не сохранён: запущен сервер Documentum старой версии. Закройте приложение и запустите обновлённую сборку.'
+      : 'Файл не сохранён: сервер Documentum не запущен. Запустите Documentum.exe и загрузите файл снова.';
+    item.stage = 0; item.done = true;
+    renderQueue();
+    return;
+  }
   for (let s = 0; s < STAGES.length; s++) {
     item.stage = s;
     renderQueue();
@@ -592,7 +654,11 @@ function renderQueue() {
     const sev = c ? 'critical' : w ? 'warning' : i ? 'info' : 'ok';
     const label = c ? `${c} критичных` : w ? `${w} ${plural(w, 'замечание', 'замечания', 'замечаний')}` : i ? `${i} ${plural(i, 'совет', 'совета', 'советов')}` : 'Без замечаний';
     let tail = '';
-    if (it.done && it.dup && !it.dupDone) tail = `<div class="qi-note">${icon('alert')}<span>Похожий документ уже есть: <b>Договор поставки № 124-А</b> (совпадение 94 %)</span><span class="spacer"></span>
+    if (it.done && it.error) tail = `<div class="qi-note" style="background:var(--critical-bg)">${icon('alert')}<span>${esc(it.error)}</span></div>`;
+    else if (it.done && it.realDoc) tail = `<div class="qi-result"><span class="status">${esc(it.type)}</span><span class="check none"><span class="sev-dot none"></span>Сохранён в базу · версия 1</span>
+        <span class="spacer" style="flex:1"></span><button class="btn small primary" data-open-real="${it.realDoc.id}">Открыть в редакторе</button></div>`
+      + it.warnings.map((w) => `<div class="qi-note">${icon('alert')}<span>${esc(w)}</span></div>`).join('');
+    else if (it.done && it.dup && !it.dupDone) tail = `<div class="qi-note">${icon('alert')}<span>Похожий документ уже есть: <b>Договор поставки № 124-А</b> (совпадение 94 %)</span><span class="spacer"></span>
       <button class="btn small primary" data-dup="version" data-q="${it.id}">Сделать новой версией</button><button class="btn small" data-dup="separate" data-q="${it.id}">Отдельно</button><button class="btn small ghost" data-dup="skip" data-q="${it.id}">Пропустить</button></div>`;
     else if (it.done && it.dup) tail = `<div class="qi-result tag ok">${icon('check')}${it.dupDone}</div>`;
     else if (it.done) tail = `<div class="qi-result"><span class="status">${it.type}</span><span class="check ${sev}"><span class="sev-dot ${sev}"></span>${label}</span>${it.scan ? '<span class="faint">распознано с точностью 97 %</span>' : ''}</div>`
@@ -610,6 +676,7 @@ function renderQueue() {
     if (b.dataset.dup === 'separate') addImported(it);
     renderQueue();
   });
+  $$('[data-open-real]', q).forEach((b) => b.onclick = () => { closeModal(); openRealDoc(+b.dataset.openReal); });
   $$('[data-link]', q).forEach((b) => b.onclick = () => { const it = importQueue.find((x) => x.id === b.dataset.q); it.linkDone = b.dataset.link === 'yes'; it.link = null; renderQueue(); });
 }
 
@@ -618,28 +685,44 @@ function renderQueue() {
    ========================================================================= */
 function openExport() {
   const st = { fmt: 'DOCX', variant: 'clean' };
+  const real = !!ed.real;
+  const title = real ? ed.real.title : DEMO.contract.title;
   const variants = [['clean', 'Чистовик', 'Итоговый текст без пометок'], ['markup', 'С правками и комментариями', 'Режим рецензирования Word: правки можно принять у получателя'],
-    ['protocol', 'Протокол разногласий', 'Таблица «редакция контрагента — наша редакция — обоснование»'], ['report', 'Отчёт о проверке', 'Список найденных ошибок с объяснениями']];
-  const fname = () => `${DEMO.contract.title}${{ clean: '', markup: ' (с правками)', protocol: ' — протокол разногласий', report: ' — отчёт о проверке' }[st.variant]}.${st.fmt.toLowerCase()}`;
+    ['protocol', 'Протокол разногласий', 'Таблица «редакция контрагента — наша редакция — обоснование»'], ['report', 'Отчёт о проверке', 'Список найденных ошибок с объяснениями']]
+    .filter(([k]) => !real || k === 'clean');
+  const disabledFmt = real ? ['ODT', 'RTF'] : [];
+  const fname = () => `${title}${{ clean: '', markup: ' (с правками)', protocol: ' — протокол разногласий', report: ' — отчёт о проверке' }[st.variant]}.${st.fmt.toLowerCase()}`;
   const draw = () => {
     openModal(`<div class="modal-head"><h2>Экспорт документа</h2><button class="icon-btn" data-close>${icon('x')}</button></div>
       <div class="modal-body">
         <div><div class="label" style="margin-bottom:8px">Формат</div><div class="formats">
-          ${[['DOCX', 'Word'], ['PDF', 'для печати'], ['ODT', 'LibreOffice'], ['RTF', 'универсальный'], ['TXT', 'только текст']].map(([f, s]) => `<button class="fmt ${st.fmt === f ? 'on' : ''}" data-fmt="${f}">${f}<small>${s}</small></button>`).join('')}</div></div>
+          ${[['DOCX', 'Word'], ['PDF', 'для печати'], ['ODT', 'LibreOffice'], ['RTF', 'универсальный'], ['TXT', 'только текст']].map(([f, s]) => `<button class="fmt ${st.fmt === f ? 'on' : ''}" data-fmt="${f}" ${disabledFmt.includes(f) ? 'disabled style="opacity:.4;cursor:default" title="Будет доступен позже"' : ''}>${f}<small>${s}</small></button>`).join('')}</div></div>
         <div><div class="label" style="margin-bottom:8px">Что выгрузить</div><div class="variants">
           ${variants.map(([k, n, s]) => `<label class="variant ${st.variant === k ? 'on' : ''}"><input type="radio" name="v" data-var="${k}" ${st.variant === k ? 'checked' : ''}><span><b>${n}</b><small>${s}</small></span></label>`).join('')}</div></div>
-        <div class="form-grid"><div class="form-row"><label>Версия</label><select>${DEMO.versions.slice().reverse().map((v) => `<option>${v.name} · ${v.source.toLowerCase()}${v.current ? ' (текущая)' : ''}</option>`).join('')}</select></div>
+        <div class="form-grid"><div class="form-row"><label>Версия</label><select>${real ? `<option>Текущее содержимое редактора (версия ${ed.real.current}${isDirty() ? ' + несохранённые правки' : ''})</option>`
+          : DEMO.versions.slice().reverse().map((v) => `<option>${v.name} · ${v.source.toLowerCase()}${v.current ? ' (текущая)' : ''}</option>`).join('')}</select></div>
           <div class="form-row"><label>Папка</label><input value="Документы\\Documentum\\Экспорт"></div>
           <div class="form-row full"><label>Имя файла</label><input id="exp-name" value="${esc(fname())}"></div></div>
         ${st.variant === 'clean' && pending().length ? `<div class="qi-note">${icon('alert')}<span>В документе ${pending().length} ${plural(pending().length, 'непринятая правка', 'непринятые правки', 'непринятых правок')}. В чистовик попадёт текст без них.</span></div>` : ''}
       </div>
       <div class="modal-foot"><span class="muted">${st.fmt === 'PDF' ? 'Оформление сохраняется как на экране' : 'Шрифты, таблицы и нумерация сохраняются'}</span><div class="spacer"></div>
         <button class="btn" data-close>Отмена</button><button class="btn primary" id="exp-go">${icon('download')}Экспортировать</button></div>`);
-    $$('[data-fmt]').forEach((b) => b.onclick = () => { st.fmt = b.dataset.fmt; draw(); });
+    $$('[data-fmt]').forEach((b) => b.onclick = () => { if (b.disabled) return; st.fmt = b.dataset.fmt; draw(); });
     $$('[data-var]').forEach((r) => r.onchange = () => { st.variant = r.dataset.var; draw(); });
     $('#exp-go').onclick = async () => {
       const name = $('#exp-name').value;
       $('#exp-go').disabled = true; $('#exp-go').textContent = 'Сохраняю…';
+      if (real) {
+        try {
+          const msg = await realExport(st.fmt, name);
+          closeModal();
+          if (msg) toast(msg);
+        } catch (e) {
+          toast('Не удалось экспортировать: ' + e.message);
+          $('#exp-go').disabled = false; $('#exp-go').textContent = 'Экспортировать';
+        }
+        return;
+      }
       await sleep(700);
       closeModal();
       toast(`Сохранено: ${name}`, 'Показать в папке', () => toast('Открыта папка Документы\\Documentum\\Экспорт'));
@@ -669,4 +752,16 @@ function briefAnswer(q) {
   };
 }
 
-go('overview');
+// Стартовый экран можно задать параметрами: ?screen=editor, ?screen=assistant&ask=Утверждённые бюджеты
+// (удобно для презентации и снимков экрана)
+(() => {
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('still') === '1') document.documentElement.classList.add('no-anim');   // для снимков экрана
+  const screen = qs.get('screen');
+  go(['overview', 'registry', 'editor', 'search', 'assistant', 'settings', 'versions'].includes(screen) ? screen : 'overview');
+  const questions = qs.getAll('ask');
+  if (screen === 'assistant' && questions.length) {
+    newChat();
+    questions.reduce((p, q) => p.then(() => ask(q)), Promise.resolve());
+  }
+})();

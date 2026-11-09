@@ -2,7 +2,7 @@
 <html lang="ru" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* http://localhost:*; frame-src 'self' about:;">
   <title>Documentum</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="screens.css">
@@ -257,6 +257,7 @@
   <script src="demo-data.js"></script>
   <script src="demo-docs.js"></script>
   <script src="app.js"></script>
+  <script src="real.js"></script>
   <script src="screens.js"></script>
 </body>
 </html>

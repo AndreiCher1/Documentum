@@ -126,6 +126,72 @@ public class AiServiceClient {
     }
 
     /**
+     * Преобразует файл в HTML для редактора (AI-сервис /editor/import).
+     * Понятные пользователю ошибки AI-сервиса (415/422) превращаются в ConversionException.
+     */
+    public com.docintell.dto.EditorDtos.ConvertedContent convertForEditor(byte[] fileBytes, String originalFilename) {
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.MULTIPART_FORM_DATA);
+        org.springframework.util.MultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
+        body.add("file", new org.springframework.core.io.ByteArrayResource(fileBytes) {
+            @Override
+            public String getFilename() {
+                return originalFilename;
+            }
+        });
+        try {
+            return restTemplate.postForObject(aiServiceUrl + "/editor/import",
+                    new org.springframework.http.HttpEntity<>(body, headers),
+                    com.docintell.dto.EditorDtos.ConvertedContent.class);
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            throw new com.docintell.exception.ConversionException(extractDetail(e.getResponseBodyAsString(java.nio.charset.StandardCharsets.UTF_8), "Формат файла не поддерживается"));
+        } catch (RestClientException e) {
+            logger.error("Ошибка при вызове AI-сервиса /editor/import: {}", e.getMessage());
+            throw new com.docintell.exception.ConversionException("Сервис преобразования документов недоступен. Попробуйте ещё раз через минуту.");
+        }
+    }
+
+    /** Проверка текста по правилам (AI-сервис /editor/check). */
+    public com.fasterxml.jackson.databind.JsonNode checkDocument(String html, String documentType) {
+        try {
+            return restTemplate.postForObject(aiServiceUrl + "/editor/check",
+                    java.util.Map.of("html", html == null ? "" : html, "documentType", documentType == null ? "" : documentType),
+                    com.fasterxml.jackson.databind.JsonNode.class);
+        } catch (RestClientException e) {
+            logger.error("Ошибка при вызове AI-сервиса /editor/check: {}", e.getMessage());
+            throw new com.docintell.exception.ConversionException("Проверка недоступна: сервис анализа не отвечает");
+        }
+    }
+
+    /** Собирает DOCX из HTML редактора (AI-сервис /editor/export-docx). */
+    public byte[] exportDocx(String html, String title) {
+        try {
+            return restTemplate.postForObject(aiServiceUrl + "/editor/export-docx",
+                    java.util.Map.of("html", html == null ? "" : html, "title", title == null ? "" : title), byte[].class);
+        } catch (RestClientException e) {
+            logger.error("Ошибка при вызове AI-сервиса /editor/export-docx: {}", e.getMessage());
+            throw new com.docintell.exception.ConversionException("Не удалось собрать DOCX: сервис преобразования недоступен");
+        }
+    }
+
+    /** Достаёт поле "detail" из JSON-ответа FastAPI. */
+    private static String extractDetail(String json, String fallback) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("\"detail\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(json == null ? "" : json);
+        if (!m.find()) {
+            return fallback;
+        }
+        String s = m.group(1).replace("\\\"", "\"");
+        // FastAPI экранирует кириллицу как \\uXXXX
+        java.util.regex.Matcher u = java.util.regex.Pattern.compile("\\\\u([0-9a-fA-F]{4})").matcher(s);
+        StringBuilder sb = new StringBuilder();
+        while (u.find()) {
+            u.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(String.valueOf((char) Integer.parseInt(u.group(1), 16))));
+        }
+        u.appendTail(sb);
+        return sb.toString();
+    }
+
+    /**
      * Рендерит страницу документа (PDF) в PNG через AI-сервис.
      */
     public byte[] renderPage(byte[] fileBytes, String originalFilename, int page) {

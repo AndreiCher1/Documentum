@@ -34,6 +34,14 @@ public enum DocumentType {
     STATEMENT("Выписка"),
     VEHICLE_DOCUMENT("Автомобильный документ (СТС / ПТС)"),
     WAYBILL("Накладная"),
+    // Корпоративные документы (ТЗ Documentum)
+    SUPPLEMENTARY_AGREEMENT("Доп. соглашение"),
+    ORDER("Приказ"),
+    MEMO("Служебная записка"),
+    REGULATION("Регламент"),
+    TECH_SPEC("ТЗ"),
+    BUDGET("Бюджет"),
+    CLAIM("Претензия"),
     UNKNOWN("Не определен");
 
     private final String displayName;

@@ -47,8 +47,8 @@ function go(name) {
   $(`#screen-${name}`).classList.add('active');
   // Экраны из screens.js рисуются при каждом открытии
   if (typeof SCREENS !== 'undefined' && SCREENS[name]) { SCREENS[name](); return; }
-  if (name === 'editor') crumbs(['Документы', DEMO.contract.folder, DEMO.contract.title]);
-  if (name === 'editor') setTimeout(() => page.focus({ preventScroll: true }), 0);
+  if (name === 'editor') crumbs(ed.real ? ['Документы', ed.real.typeName, ed.real.title] : ['Документы', DEMO.contract.folder, DEMO.contract.title]);
+  if (name === 'versions' && ed.real) { realVersions(); return; }
   if (name === 'assistant') crumbs(['Ассистент', chat.title || 'Новый вопрос']);
   if (name === 'versions') { crumbs(['Документы', DEMO.contract.title, 'История версий']); renderVersions(); }
 }
@@ -81,7 +81,9 @@ const ed = {
   version: 2,
 };
 const page = $('#page');
-const findingById = (id) => DEMO.findings.find((f) => f.id === id);
+// Находки открытого документа: демо-договора или документа из базы (после проверки)
+const FINDINGS = () => (ed.real ? ed.real.findings || [] : DEMO.findings);
+const findingById = (id) => FINDINGS().find((f) => f.id === id);
 const SEV_LABEL = { critical: 'Критично', warning: 'Замечание', info: 'Совет' };
 
 function renderPage() {
@@ -95,7 +97,7 @@ function renderPage() {
   $('#doc-title').textContent = DEMO.contract.title;
 }
 
-const pending = () => DEMO.findings.filter((f) => !ed.res[f.id]);
+const pending = () => FINDINGS().filter((f) => !ed.res[f.id]);
 const markOf = (id) => page.querySelector(`[data-sid="${id}"]`);
 
 function verdict() {
@@ -108,6 +110,7 @@ function verdict() {
 function renderLeft(tab = ed.leftTab || 'outline') {
   ed.leftTab = tab;
   $$('[data-ltab]').forEach((t) => t.classList.toggle('active', t.dataset.ltab === tab));
+  if (ed.real) { realLeft(tab); return; }
   const body = $('#left-body');
   if (tab === 'outline') {
     const heads = DEMO.contract.blocks.filter((b) => b.kind === 'h1' || b.kind === 'h2');
@@ -154,7 +157,7 @@ function renderSummary() {
   const p = pending();
   const c = (s) => p.filter((f) => f.severity === s).length;
   const [vcls, vtxt] = verdict();
-  const cats = ['all', ...new Set(DEMO.findings.map((f) => f.category))];
+  const cats = ['all', ...new Set(FINDINGS().map((f) => f.category))];
   $('#review-summary').innerHTML = `
     <div class="verdict"><span class="verdict-badge ${vcls}">${vtxt}</span>
       <span class="counters"><span class="c-critical">Критично: <b>${c('critical')}</b></span>
@@ -194,8 +197,9 @@ function cardHTML(f) {
 }
 
 function renderReview() {
+  if (ed.real && !ed.real.findings) { realReview(); return; }   // документ из базы ещё не проверялся
   renderSummary();
-  const list = DEMO.findings.filter((f) => ed.filter === 'all' || f.category === ed.filter);
+  const list = FINDINGS().filter((f) => ed.filter === 'all' || f.category === ed.filter);
   const open = list.filter((f) => !ed.res[f.id]);
   const done = list.filter((f) => ed.res[f.id]);
   let html = open.map(cardHTML).join('');
@@ -233,6 +237,7 @@ function activate(id, scroll) {
   $$('.page .active').forEach((m) => m.classList.remove('active'));
   const m = markOf(id);
   if (m) { m.classList.add('active'); if (scroll) m.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  else if (scroll && findingById(id)?.block) scrollToBlock(findingById(id).block);   // замечание без пометки в тексте
   $$('.card').forEach((c) => c.classList.toggle('active', c.dataset.card === id));
   const card = $(`[data-card="${id}"]`);
   if (card && !scroll) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -252,15 +257,17 @@ page.addEventListener('mouseover', (e) => {
 function resolve(id, status) {
   const f = findingById(id);
   const m = markOf(id);
-  if (!m) return;
-  const html = m.outerHTML;
-  let text;
-  if (f.noteOnly) text = m.textContent;
-  else text = status === 'accepted' ? (m.querySelector('ins')?.textContent || '') : (m.querySelector('del')?.textContent || '');
-  const span = document.createElement('span');
-  span.dataset.rid = id;
-  span.textContent = text;
-  m.replaceWith(span);
+  if (!m && !f.noteOnly) return;
+  // Замечание без пометки в тексте (например, «нет раздела») просто отмечаем решённым
+  const html = m ? m.outerHTML : null;
+  if (m) {
+    const span = document.createElement('span');
+    span.dataset.rid = id;
+    if (f.noteOnly) span.append(...m.childNodes);
+    else if (status === 'accepted') span.textContent = m.querySelector('ins')?.textContent || '';
+    else { const d = m.querySelector('del'); if (d) span.append(...d.childNodes); }   // исходный текст с форматированием
+    m.replaceWith(span);
+  }
   ed.res[id] = { status, html };
   if (ed.active === id) ed.active = null;
   markSaved();
@@ -272,12 +279,15 @@ function resolve(id, status) {
 
 function unresolve(id) {
   const r = ed.res[id];
+  if (!r) return;
   const span = page.querySelector(`[data-rid="${id}"]`);
-  if (!r || !span) return;
-  const tmp = document.createElement('div');
-  tmp.innerHTML = r.html;
-  span.replaceWith(tmp.firstChild);
+  if (r.html && span) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = r.html;
+    span.replaceWith(tmp.firstChild);
+  }
   delete ed.res[id];
+  if (ed.real) realOnInput();
   renderReview();
 }
 
@@ -298,6 +308,7 @@ function commitMessage(ids) {
 }
 
 function renderCommitBar() {
+  if (ed.real) { realCommitBar(); return; }
   const ids = uncommitted();
   const bar = $('#commit-bar');
   bar.hidden = !ids.length;
@@ -309,6 +320,7 @@ function renderCommitBar() {
 $('#commit-msg').addEventListener('input', () => { ed.msgEdited = true; });
 
 $('#commit-btn').onclick = () => {
+  if (ed.real) { realCommit(); return; }
   const ids = uncommitted();
   ed.version += 1;
   const now = new Date();
@@ -326,12 +338,13 @@ $('#commit-btn').onclick = () => {
 };
 
 function markSaved() {
+  if (ed.real) { realOnInput(); return; }        // документ из базы — автосохранение черновика на сервер
   const s = $('#save-state');
   s.innerHTML = 'Сохраняется…';
   clearTimeout(ed.saveT);
   ed.saveT = setTimeout(() => { s.innerHTML = `${icon('check')}Сохранено · версия ${ed.version}`; }, 700);
 }
-page.addEventListener('input', () => { markSaved(); renderStatus(); });
+page.addEventListener('input', () => { if (ed.real) realOnInput(); else markSaved(); renderStatus(); });
 
 function renderStatus() {
   const words = (page.innerText.match(/\S+/g) || []).length;
@@ -395,6 +408,7 @@ $('#expand-right').onclick = () => { screenEd.classList.remove('right-collapsed'
 
 // Повторная проверка — показывает этапы, как будет в рабочей версии
 $('#run-check').onclick = async () => {
+  if (ed.real) { realRunCheck(); return; }
   switchRightTab('review');
   const box = $('#review-summary');
   const stages = ['Правила: реквизиты, даты, суммы, нумерация', 'Сверка с базой: счета, приказы, справочник контрагентов', 'Смысловой анализ (языковая модель)'];
@@ -581,6 +595,7 @@ function renderVersions() {
 }
 
 $('#screen-versions').addEventListener('click', (e) => {
+  if (ed.real) return;                      // для настоящих документов — обработчик в real.js
   const v = e.target.closest('[data-ver]');
   if (!v) return;
   const id = v.dataset.ver;
@@ -672,6 +687,7 @@ let syncing = false;
 });
 
 $('#revert-btn').onclick = () => {
+  if (ed.real) { realRevert(); return; }
   const from = DEMO.versions.find((x) => x.id === cmp.a);
   ed.version += 1;
   DEMO.versions.forEach((v) => { v.current = false; });

@@ -27,6 +27,11 @@ from app.api.schemas import (
     AskQuestionRequest,
     AskQuestionResponse
 )
+from fastapi import Response
+from pydantic import BaseModel
+from app.editor.converter import convert_to_html, UnsupportedFormatError
+from app.editor.exporter import html_to_docx
+from app.checks.engine import check_html
 from app.preprocessing.pipeline import DocumentPreprocessor
 from app.ocr.factory import get_ocr_engine
 from app.classifier.factory import get_document_classifier
@@ -414,6 +419,50 @@ async def ask_document_question(request: AskQuestionRequest):
             confidence=0.0,
             message=str(e)
         )
+
+
+class ExportDocxRequest(BaseModel):
+    html: str
+    title: str = ""
+
+
+@app.post("/editor/import")
+def editor_import(file: UploadFile = File(...)):
+    """
+    Преобразует файл (DOCX, PDF, скан, TXT, DOC/RTF/ODT) в HTML для редактора.
+    Обычная (не async) функция: FastAPI выполняет её в пуле потоков, OCR не блокирует сервис.
+    """
+    content = file.file.read()
+    try:
+        result = convert_to_html(content, file.filename or "document")
+    except UnsupportedFormatError as e:
+        raise HTTPException(status_code=415, detail=str(e))
+    except Exception as e:
+        logger.error(f"Ошибка преобразования '{file.filename}' для редактора: {e}", exc_info=True)
+        raise HTTPException(status_code=422, detail=f"Не удалось прочитать файл: {e}")
+    return {"html": result.html, "title": result.title, "sourceKind": result.source_kind, "warnings": result.warnings}
+
+
+class CheckRequest(BaseModel):
+    html: str
+    documentType: str = ""
+
+
+@app.post("/editor/check")
+def editor_check(request: CheckRequest):
+    """Проверка текста документа по правилам: реквизиты, суммы, даты, нумерация, шаблон, орфография."""
+    return check_html(request.html, request.documentType)
+
+
+@app.post("/editor/export-docx")
+def editor_export_docx(request: ExportDocxRequest):
+    """Собирает DOCX из HTML редактора."""
+    try:
+        data = html_to_docx(request.html, request.title)
+    except Exception as e:
+        logger.error(f"Ошибка экспорта в DOCX: {e}", exc_info=True)
+        raise HTTPException(status_code=422, detail=f"Не удалось собрать DOCX: {e}")
+    return Response(content=data, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8"><style>
+  html,body{margin:0;background:#fff}
+  svg{display:block}
+  text{font-family:"Segoe UI",Arial,sans-serif;fill:#1f1a2e}
+  .t{font-size:30px;font-weight:700}
+  .s{font-size:21px;fill:#4a4560}
+  .chip{font-size:19px;font-weight:600;fill:#4b1fa8}
+  .ochip{font-size:19px;font-weight:600;fill:#a24f00}
+  .lbl{font-size:18px;fill:#6b6680;font-weight:600}
+  .badge{font-size:16px;font-weight:700;fill:#fff;letter-spacing:.5px}
+</style></head><body>
+<svg width="1600" height="1400" viewBox="0 0 1600 1400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7a2ff7"/></marker>
+  </defs>
+
+  <!-- Пользователь -->
+  <rect x="520" y="30" width="560" height="76" rx="38" fill="#f3edff" stroke="#7a2ff7" stroke-width="2.5"/>
+  <text x="800" y="78" text-anchor="middle" class="t" style="font-size:27px">Сотрудник · офисный ПК (Windows)</text>
+  <line x1="800" y1="106" x2="800" y2="150" stroke="#7a2ff7" stroke-width="3" marker-end="url(#a)"/>
+
+  <!-- Контур «локальный ПК» -->
+  <rect x="40" y="160" width="1520" height="1110" rx="26" fill="#fbf9ff" stroke="#b9a3f5" stroke-width="2.5" stroke-dasharray="12 9"/>
+  <rect x="70" y="142" width="440" height="38" rx="8" fill="#7a2ff7"/>
+  <text x="290" y="168" text-anchor="middle" class="badge">ВСЁ НА КОМПЬЮТЕРЕ ПОЛЬЗОВАТЕЛЯ · ОФЛАЙН</text>
+
+  <!-- Лаунчер -->
+  <rect x="90" y="210" width="1420" height="96" rx="16" fill="#fff" stroke="#d9cdfb" stroke-width="2"/>
+  <text x="120" y="252" class="t">Documentum.exe — лаунчер</text>
+  <text x="120" y="286" class="s">Запускает службы одним ярлыком, следит за ними и перезапускает упавшие</text>
+
+  <!-- Интерфейс -->
+  <rect x="90" y="330" width="1420" height="200" rx="16" fill="#fff" stroke="#7a2ff7" stroke-width="3"/>
+  <text x="120" y="374" class="t">Интерфейс · Electron</text>
+  <text x="120" y="408" class="s">Редактор в стиле Word с правками «как в Git», реестр, поиск, история версий</text>
+  <g>
+    <rect x="120" y="432" width="160" height="44" rx="22" fill="#efe7ff"/><text x="200" y="461" text-anchor="middle" class="chip">Обзор</text>
+    <rect x="292" y="432" width="160" height="44" rx="22" fill="#efe7ff"/><text x="372" y="461" text-anchor="middle" class="chip">Реестр</text>
+    <rect x="464" y="432" width="280" height="44" rx="22" fill="#efe7ff"/><text x="604" y="461" text-anchor="middle" class="chip">Редактор и правки</text>
+    <rect x="756" y="432" width="160" height="44" rx="22" fill="#efe7ff"/><text x="836" y="461" text-anchor="middle" class="chip">Поиск</text>
+    <rect x="928" y="432" width="210" height="44" rx="22" fill="#efe7ff"/><text x="1033" y="461" text-anchor="middle" class="chip">ИИ-ассистент</text>
+    <rect x="1150" y="432" width="160" height="44" rx="22" fill="#efe7ff"/><text x="1230" y="461" text-anchor="middle" class="chip">Версии</text>
+    <rect x="1322" y="432" width="160" height="44" rx="22" fill="#efe7ff"/><text x="1402" y="461" text-anchor="middle" class="chip">Экспорт</text>
+  </g>
+  <text x="120" y="512" class="s" style="font-size:18px">Импорт DOCX · PDF · сканов → правка → экспорт DOCX · PDF</text>
+
+  <line x1="800" y1="530" x2="800" y2="590" stroke="#7a2ff7" stroke-width="3" marker-end="url(#a)"/>
+  <text x="820" y="566" class="lbl">REST / JSON · localhost:8085</text>
+
+  <!-- Сервер данных + БД -->
+  <rect x="90" y="600" width="1000" height="200" rx="16" fill="#fff" stroke="#7a2ff7" stroke-width="3"/>
+  <text x="120" y="644" class="t">Сервер данных · Java 21, Spring Boot</text>
+  <text x="120" y="682" class="s">• документы и карточки, черновик с автосохранением</text>
+  <text x="120" y="714" class="s">• версии документа и их сравнение, возврат версии</text>
+  <text x="120" y="746" class="s">• результаты проверок, счётчики ошибок для реестра</text>
+  <text x="120" y="778" class="s">• выгрузка DOCX / PDF</text>
+
+  <rect x="1130" y="600" width="380" height="200" rx="16" fill="#fff" stroke="#d9cdfb" stroke-width="2"/>
+  <ellipse cx="1320" cy="650" rx="70" ry="18" fill="#efe7ff" stroke="#7a2ff7" stroke-width="2"/>
+  <path d="M1250,650 v52 a70,18 0 0 0 140,0 v-52" fill="#efe7ff" stroke="#7a2ff7" stroke-width="2"/>
+  <text x="1320" y="752" text-anchor="middle" class="t" style="font-size:25px">База H2 + файлы</text>
+  <text x="1320" y="782" text-anchor="middle" class="s" style="font-size:19px">оригиналы · версии · проверки</text>
+  <line x1="1090" y1="700" x2="1126" y2="700" stroke="#7a2ff7" stroke-width="3" marker-end="url(#a)"/>
+
+  <line x1="590" y1="800" x2="590" y2="860" stroke="#7a2ff7" stroke-width="3" marker-end="url(#a)"/>
+  <text x="610" y="836" class="lbl">REST · localhost:8000</text>
+
+  <!-- AI-сервис -->
+  <rect x="90" y="870" width="1420" height="250" rx="16" fill="#fff" stroke="#f08a24" stroke-width="3"/>
+  <text x="120" y="914" class="t">AI-сервис · Python, FastAPI</text>
+  <g>
+    <rect x="120" y="940" width="440" height="150" rx="14" fill="#fff4e8"/>
+    <text x="140" y="976" class="ochip" style="font-size:22px">Чтение документов</text>
+    <text x="140" y="1010" class="s" style="font-size:19px">DOCX, PDF → редактируемый текст</text>
+    <text x="140" y="1038" class="s" style="font-size:19px">сканы и фото → OCR (PaddleOCR)</text>
+    <text x="140" y="1066" class="s" style="font-size:19px">текст → DOCX для экспорта</text>
+
+    <rect x="580" y="940" width="440" height="150" rx="14" fill="#fff4e8"/>
+    <text x="600" y="976" class="ochip" style="font-size:22px">Проверка по правилам</text>
+    <text x="600" y="1010" class="s" style="font-size:19px">ИНН, ОГРН, счёт и БИК, даты</text>
+    <text x="600" y="1038" class="s" style="font-size:19px">сумма прописью, итоги таблиц</text>
+    <text x="600" y="1066" class="s" style="font-size:19px">нумерация, ссылки, шаблон, орфография</text>
+
+    <rect x="1040" y="940" width="440" height="150" rx="14" fill="#fff" stroke="#f08a24" stroke-width="2" stroke-dasharray="8 6"/>
+    <text x="1060" y="976" class="ochip" style="font-size:22px">Языковая модель · llama.cpp</text>
+    <text x="1060" y="1010" class="s" style="font-size:19px">вопросы к базе и сводки</text>
+    <text x="1060" y="1038" class="s" style="font-size:19px">смысловые противоречия, риски</text>
+    <text x="1060" y="1066" class="s" style="font-size:19px">Qwen 3–4B, работает на процессоре</text>
+  </g>
+
+  <!-- Нижняя строка -->
+  <rect x="90" y="1150" width="1420" height="90" rx="16" fill="#7a2ff7"/>
+  <text x="800" y="1190" text-anchor="middle" style="font-size:24px;font-weight:700;fill:#fff">Данные не покидают компьютер · интернет не нужен</text>
+  <text x="800" y="1224" text-anchor="middle" style="font-size:20px;fill:#e6dbff">Работает на офисном ПК с 8–16 ГБ памяти без видеокарты</text>
+
+  <!-- Легенда -->
+  <rect x="1060" y="1300" width="26" height="18" rx="4" fill="#fff" stroke="#f08a24" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="1098" y="1316" class="s" style="font-size:18px">— в разработке (этап 6)</text>
+  <rect x="90" y="1300" width="26" height="18" rx="4" fill="#fff" stroke="#7a2ff7" stroke-width="3"/>
+  <text x="128" y="1316" class="s" style="font-size:18px">— работает в прототипе</text>
+</svg>
+</body></html>

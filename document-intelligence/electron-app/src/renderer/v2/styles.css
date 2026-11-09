@@ -233,6 +233,10 @@ svg.i.sm { width: 15px; height: 15px; }
 .page p { margin: 0 0 5px; text-indent: 32px; }
 .page p.meta { display: flex; justify-content: space-between; text-indent: 0; margin-bottom: 16px; }
 .page p.req { text-indent: 0; }
+.page table { width: 100%; border-collapse: collapse; margin: 8px 0 10px; text-align: left; }
+.page td, .page th { border: 1px solid #9ca1aa; padding: 4px 7px; vertical-align: top; }
+.page ul, .page ol { margin: 0 0 5px; padding-left: 28px; }
+.page h3 { font-size: 15.5px; margin: 14px 0 6px; }
 .page ::selection { background: #b9d4ff; }
 
 .page .sug, .page .note { border-radius: 2px; cursor: pointer; transition: box-shadow .15s; }
