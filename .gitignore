@@ -12,3 +12,6 @@ document-intelligence/java-backend/data/
 *.tmp
 *.rar
 *.zip
+
+# Материалы презентаций — хранятся локально
+document-intelligence/docs/presentation/
