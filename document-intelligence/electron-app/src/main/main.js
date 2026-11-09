@@ -95,7 +95,11 @@ function createWindow() {
     });
 
     // Загружаем главную HTML-страницу
-    mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+    // Новый интерфейс (v2). Старый интерфейс распознавания доступен с флагом --legacy.
+    const legacy = process.argv.includes('--legacy');
+    mainWindow.loadFile(legacy
+        ? path.join(__dirname, '..', 'renderer', 'index.html')
+        : path.join(__dirname, '..', 'renderer', 'v2', 'index.html'));
 
     // В режиме разработки открываем DevTools
     if (process.argv.includes('--dev')) {
