@@ -5,6 +5,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:;">
   <title>Documentum</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="screens.css">
 </head>
 <body>
   <!-- Набор иконок -->
@@ -61,14 +62,14 @@
         <input id="quick-search" placeholder="Быстрый поиск">
         <span class="kbd">Ctrl K</span>
       </label>
-      <button class="btn" data-toast="Импорт документов будет на следующем шаге макета"><svg class="i sm"><use href="#i-upload"/></svg>Загрузить</button>
+      <button class="btn" data-open="import"><svg class="i sm"><use href="#i-upload"/></svg>Загрузить</button>
       <button class="icon-btn" title="Уведомления" data-toast="3 новых уведомления: проверка договора № 124-А завершена"><svg class="i"><use href="#i-bell"/></svg><span class="dot-badge"></span></button>
       <span class="ai-status" title="Локальная модель · расчёт на процессоре · 2,4 ГБ памяти"><span class="pulse"></span>ИИ готов</span>
     </header>
 
     <aside class="rail">
       <button class="icon-btn" data-nav="overview" title="Обзор"><svg class="i"><use href="#i-home"/></svg></button>
-      <button class="icon-btn" data-nav="editor" title="Документы"><svg class="i"><use href="#i-file"/></svg></button>
+      <button class="icon-btn" data-nav="registry" title="Документы"><svg class="i"><use href="#i-file"/></svg></button>
       <button class="icon-btn" data-nav="search" title="Поиск"><svg class="i"><use href="#i-search"/></svg></button>
       <button class="icon-btn" data-nav="assistant" title="Ассистент"><svg class="i"><use href="#i-spark"/></svg></button>
       <div class="grow"></div>
@@ -99,7 +100,7 @@
             <span class="save-state" id="save-state"><svg class="i sm"><use href="#i-check"/></svg>Сохранено · версия 2</span>
             <div class="spacer"></div>
             <button class="btn ghost small" data-nav="versions"><svg class="i sm"><use href="#i-history"/></svg>История</button>
-            <button class="btn ghost small" data-toast="Экспорт в DOCX/PDF будет на следующем шаге макета"><svg class="i sm"><use href="#i-download"/></svg>Экспорт</button>
+            <button class="btn ghost small" data-open="export"><svg class="i sm"><use href="#i-download"/></svg>Экспорт</button>
             <button class="icon-btn" id="expand-right" title="Показать панель проверки" hidden><svg class="i sm"><use href="#i-panel-r"/></svg></button>
           </div>
           <div class="toolbar" id="toolbar">
@@ -195,7 +196,7 @@
           <div class="chat-composer">
             <div class="wrap">
               <div class="scope-select">Искать в:
-                <span class="chip filter" id="scope-chip"><svg class="i sm"><use href="#i-folder"/></svg>Вся база · 1 284 документа</span>
+                <span class="chip filter" id="scope-chip"><svg class="i sm"><use href="#i-folder"/></svg>Вся база · 23 документа</span>
               </div>
               <div class="composer">
                 <textarea id="chat-input" rows="1" placeholder="Спросите что угодно о документах: «утверждённые бюджеты», «договоры с Вектор Снаб»…"></textarea>
@@ -242,14 +243,20 @@
         </section>
       </section>
 
-      <!-- ============ Заглушки ============ -->
-      <section class="screen" id="screen-placeholder"><div class="placeholder" id="placeholder"></div></section>
+      <!-- ============ Обзор, реестр, поиск, настройки (рисуются из screens.js) ============ -->
+      <section class="screen" id="screen-overview"><div class="scroll"><div class="ov" id="ov"></div></div></section>
+      <section class="screen" id="screen-registry"></section>
+      <section class="screen" id="screen-search"></section>
+      <section class="screen" id="screen-settings"></section>
     </main>
   </div>
 
+  <div class="modal-back" id="modal" hidden><div class="modal" id="modal-box"></div></div>
   <div class="toasts" id="toasts"></div>
 
   <script src="demo-data.js"></script>
+  <script src="demo-docs.js"></script>
   <script src="app.js"></script>
+  <script src="screens.js"></script>
 </body>
 </html>

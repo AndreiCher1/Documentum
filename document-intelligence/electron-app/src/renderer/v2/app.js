@@ -35,12 +35,6 @@ const store = {
 /* -------------------------------------------------------------------------
    Навигация
    ------------------------------------------------------------------------- */
-const PLACEHOLDERS = {
-  overview: ['home', 'Обзор', 'Что требует внимания сегодня: документы с критичными ошибками, правки на утверждение и ближайшие сроки по договорам.'],
-  search: ['search', 'Поиск', 'Поиск по словам и по смыслу по всей базе, с фильтрами по типу, периоду, контрагенту и сумме.'],
-  settings: ['settings', 'Настройки', 'Реквизиты организации, справочники, правила проверок, выбор модели ИИ и резервное копирование.'],
-};
-
 function crumbs(parts) {
   $('#crumbs').innerHTML = parts.map((p, i) =>
     (i ? '<span class="sep">/</span>' : '') + (i === parts.length - 1 ? `<b>${esc(p)}</b>` : `<span>${esc(p)}</span>`)).join('');
@@ -48,18 +42,13 @@ function crumbs(parts) {
 
 function go(name) {
   $$('.screen').forEach((s) => s.classList.remove('active'));
-  $$('.rail [data-nav]').forEach((b) => b.classList.toggle('active', b.dataset.nav === name || (name === 'versions' && b.dataset.nav === 'editor')));
-  if (PLACEHOLDERS[name]) {
-    const [ic, title, text] = PLACEHOLDERS[name];
-    $('#placeholder').innerHTML = `<div class="ico">${icon(ic, '')}</div><h2>${title}</h2><div>${text}</div>
-      <div class="faint" style="font-size:13px">Экран появится на следующем шаге макета.</div>
-      <button class="btn" data-nav="editor">Открыть договор № 124-А</button>`;
-    $('#screen-placeholder').classList.add('active');
-    crumbs([title]);
-    return;
-  }
+  const railName = name === 'editor' || name === 'versions' ? 'registry' : name;
+  $$('.rail [data-nav]').forEach((b) => b.classList.toggle('active', b.dataset.nav === railName));
   $(`#screen-${name}`).classList.add('active');
+  // Экраны из screens.js рисуются при каждом открытии
+  if (typeof SCREENS !== 'undefined' && SCREENS[name]) { SCREENS[name](); return; }
   if (name === 'editor') crumbs(['Документы', DEMO.contract.folder, DEMO.contract.title]);
+  if (name === 'editor') setTimeout(() => page.focus({ preventScroll: true }), 0);
   if (name === 'assistant') crumbs(['Ассистент', chat.title || 'Новый вопрос']);
   if (name === 'versions') { crumbs(['Документы', DEMO.contract.title, 'История версий']); renderVersions(); }
 }
@@ -774,6 +763,7 @@ function route(q) {
   if (/истека|заканчива|срок/.test(ql) && /договор/.test(ql)) { chat.ctx = { topic: 'contracts' }; return expiringAnswer(); }
   if (/вектор/.test(ql)) { chat.ctx = { topic: 'vendor' }; return vendorAnswer(); }
   if (/приказ/.test(ql) && /охран|труд/.test(ql)) { chat.ctx = { topic: 'orders' }; return ordersAnswer(); }
+  if (/^кратко:/.test(ql) && typeof briefAnswer === 'function') { const b = briefAnswer(q); if (b) return b; }
   return notFound(q);
 }
 
@@ -886,7 +876,7 @@ function vendorAnswer() {
         <tr><td><span class="doc-link" data-nav="editor">Договор поставки № 124-А</span></td><td>21.07.2025</td><td><span class="tag critical"><span class="sev-dot critical"></span>3 критичных</span></td></tr>
         <tr><td><span class="doc-link" data-ref="Счёт № 412">Счёт № 412</span></td><td>05.08.2025</td><td><span class="tag ok"><span class="sev-dot ok"></span>Без замечаний</span></td></tr>
         <tr><td><span class="doc-link" data-ref="Спецификация">Спецификация (Приложение № 1)</span></td><td>21.07.2025</td><td><span class="tag ok"><span class="sev-dot ok"></span>Без замечаний</span></td></tr>
-        <tr><td><span class="doc-link" data-ref="Акт № 58">Акт приёма-передачи № 58</span></td><td>29.09.2025</td><td><span class="tag warning"><span class="sev-dot warning"></span>Дата позже срока поставки</span></td></tr>
+        <tr><td><span class="doc-link" data-ref="Акт № 58">Акт приёма-передачи № 58</span></td><td>03.10.2025</td><td><span class="tag warning"><span class="sev-dot warning"></span>Приёмка позже срока поставки</span></td></tr>
         <tr><td><span class="doc-link" data-ref="Претензия">Претензия о просрочке поставки</span></td><td>02.10.2025</td><td><span class="tag ok"><span class="sev-dot ok"></span>Без замечаний</span></td></tr>
         </tbody></table></div>`;
     },
