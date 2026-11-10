@@ -406,6 +406,50 @@ $('#expand-left').onclick = () => { screenEd.classList.remove('left-collapsed');
 $('#collapse-right').onclick = () => { screenEd.classList.add('right-collapsed'); syncPanels(); };
 $('#expand-right').onclick = () => { screenEd.classList.remove('right-collapsed'); syncPanels(); };
 
+// Боковые панели редактора раздвигаются мышью за границу; ширина запоминается, двойной щелчок возвращает обычную
+(function panelResizers() {
+  const SIDES = { left: { panel: '.side-left', prop: '--left-w', min: 180, max: 480, key: 'ed-left-w' },
+    right: { panel: '.side-right', prop: '--right-w', min: 280, max: 760, key: 'ed-right-w' } };
+  const CENTER_MIN = 420;                       // документу всегда остаётся место
+  const store = (fn) => { try { return fn(); } catch (e) { return null; } };
+  Object.entries(SIDES).forEach(([side, cfg]) => {
+    const panel = $(cfg.panel, screenEd);
+    if (!panel) return;
+    const saved = +store(() => localStorage.getItem(cfg.key));
+    if (saved >= cfg.min && saved <= cfg.max) screenEd.style.setProperty(cfg.prop, saved + 'px');
+    const grip = document.createElement('div');
+    grip.className = 'resizer';
+    grip.title = 'Потяните, чтобы изменить ширину панели. Двойной щелчок — обычная ширина';
+    panel.appendChild(grip);
+    grip.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      store(() => grip.setPointerCapture(e.pointerId));
+      grip.classList.add('dragging');
+      document.body.classList.add('resizing');
+      const startX = e.clientX;
+      const startW = panel.getBoundingClientRect().width;
+      const other = $(SIDES[side === 'left' ? 'right' : 'left'].panel, screenEd).getBoundingClientRect().width;
+      const room = screenEd.getBoundingClientRect().width - other - CENTER_MIN;
+      let width = startW;
+      const move = (ev) => {
+        const delta = side === 'left' ? ev.clientX - startX : startX - ev.clientX;
+        width = Math.round(Math.max(cfg.min, Math.min(cfg.max, room, startW + delta)));
+        screenEd.style.setProperty(cfg.prop, width + 'px');
+      };
+      const up = () => {
+        grip.removeEventListener('pointermove', move);
+        grip.classList.remove('dragging');
+        document.body.classList.remove('resizing');
+        store(() => localStorage.setItem(cfg.key, width));
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', up, { once: true });
+      grip.addEventListener('pointercancel', up, { once: true });
+    });
+    grip.addEventListener('dblclick', () => { screenEd.style.removeProperty(cfg.prop); store(() => localStorage.removeItem(cfg.key)); });
+  });
+})();
+
 // Повторная проверка — показывает этапы, как будет в рабочей версии
 $('#run-check').onclick = async () => {
   if (ed.real) { realRunCheck(); return; }
@@ -482,7 +526,6 @@ async function askDoc(q) {
 async function askRealDoc(q, holder) {
   let res;
   try {
-    if (isDirty()) await API.draft(ed.real.id, cleanHTML()).catch(() => {});
     res = await API.assistant(q, null, ed.real.id);
   } catch (e) {
     holder.textContent = 'Не удалось получить ответ: ' + e.message;
@@ -494,7 +537,7 @@ async function askRealDoc(q, holder) {
   await typeInto(holder, (res.summary || '').replace(/\s*\[\d+\]/g, ''), 10);
   holder.innerHTML = esc(res.summary || '').replace(/\[(\d+)\]/g, (m, n) => (src[n] ? `<span class="ref" data-src="${n}">${n}</span>` : ''));
   if (res.sources?.length) {
-    holder.insertAdjacentHTML('beforeend', '<div>' + res.sources.map((s) => `<button class="cite" data-src="${s.n}" title="${esc(s.quote)}">${icon('file')}${esc(s.quote.slice(0, 42))}${s.quote.length > 42 ? '…' : ''}</button>`).join('') + '</div>');
+    holder.insertAdjacentHTML('beforeend', '<div class="faint" style="font-size:12px;margin-top:8px">Источники в документе:</div><div>' + res.sources.map((s) => `<button class="cite" data-src="${s.n}" title="${esc(s.quote)}">${icon('file')}${esc(s.quote.slice(0, 42))}${s.quote.length > 42 ? '…' : ''}</button>`).join('') + '</div>');
   }
   if (res.found) {
     holder.insertAdjacentHTML('beforeend', `<div class="faint" style="font-size:12px;margin-top:6px">${res.generated ? 'Ответ сформулирован языковой моделью по тексту документа — сверяйте с источником.' : 'Языковая модель не подключена — показаны подходящие места.'}</div>`);

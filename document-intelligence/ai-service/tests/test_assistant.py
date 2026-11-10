@@ -173,4 +173,40 @@ def test_tidy_not_stated():
     from app.assistant.engine import _tidy
     assert _tidy("в документе это не указано [1]") == "В документе это не указано."
     assert _tidy("Срок — 10 дней [2]. В документе это не указано.") == "Срок — 10 дней [2]."
+    assert _tidy("Каркас состоит из меню и панели [1]. Также есть индикатор фоновых задач и прогресс импо") == "Каркас состоит из меню и панели [1]."
+
+
+
+
+def test_matched_heading_brings_its_section():
+    from app.assistant.engine import _fragments, _terms, _with_sections
+    blocks = ["Регламент"] + ["Вводный абзац. " * 30] + ["1. Каркас окна и общие элементы", "Левое меню", "Логотип и пункты меню",
+              "Верхняя панель", "2. Экран «Обзор»", "Стартовый экран со счётчиками"]
+    frags = _with_sections(blocks, _fragments(blocks, _terms("из чего состоит каркас"), 8, 600))
+    sec = next(f for f in frags if f.get("section"))
+    assert sec["block"] == 2 and sec["quote"] == "1. Каркас окна и общие элементы"
+    assert "Левое меню" in sec["text"] and "Верхняя панель" in sec["text"] and "Стартовый экран" not in sec["text"]
+
+
+
+
+def test_outline_gives_every_section_a_number():
+    from app.assistant.engine import _fragments, _terms, _with_outline, _with_sections
+    blocks = ["Каталог"] + ["Вводный абзац про экраны. " * 20] + ["1. Каркас окна", "Левое меню", "2. Экран «Обзор»", "Счётчики",
+              "3. Экран «Поиск»", "Строка поиска"]
+    frags = _with_outline(blocks, _with_sections(blocks, _fragments(blocks, _terms("какие экраны"), 8, 600)))
+    assert [f["block"] for f in frags] == sorted(f["block"] for f in frags)
+    assert {2, 4, 6} <= {f["block"] for f in frags}                      # все заголовки на месте, каждый можно процитировать
+    assert len({f["block"] for f in frags}) == len(frags)
+
+
+
+
+def test_reference_ranges_and_heading_numbers():
+    from app.assistant.engine import _clean_refs, _fix_heading_refs
+    assert _clean_refs("Экраны [7–9], панели [2, 4] и ещё [12-99].", 9) == "Экраны [7][8][9], панели [2][4] и ещё ."
+    frags = [{"n": 4, "outline": True, "quote": "2. Экран «Обзор»"}, {"n": 6, "section": True, "quote": "3. Экран «Поиск»"}, {"n": 2, "quote": None}]
+    assert _fix_heading_refs("Есть 2. Экран «Обзор» [2] и экран «Поиск» [3]. Всего их семь [2].", frags) \
+        == "Есть 2. Экран «Обзор» [4] и экран «Поиск» [6]. Всего их семь [2]."
+    assert _fix_heading_refs("Также есть экран «Обзор», экран «Поиск» и прочее [7][8][9].", frags) == "Также есть экран «Обзор», экран «Поиск» и прочее [4][6]."
 

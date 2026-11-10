@@ -173,12 +173,20 @@ svg.i.sm { width: 15px; height: 15px; }
 
 /* ---------- Экран редактора ---------- */
 #screen-editor { display: none; }
-#screen-editor.active { display: grid; grid-template-columns: 250px 1fr 340px; }
-#screen-editor.left-collapsed { grid-template-columns: 0 1fr 340px; }
-#screen-editor.right-collapsed { grid-template-columns: 250px 1fr 0; }
-#screen-editor.left-collapsed.right-collapsed { grid-template-columns: 0 1fr 0; }
-.side-left { border-right: 1px solid var(--border); overflow: hidden; }
-.side-right { border-left: 1px solid var(--border); overflow: hidden; }
+#screen-editor.active { display: grid; grid-template-columns: var(--left-w, 250px) minmax(0, 1fr) var(--right-w, 340px); }
+#screen-editor.left-collapsed { grid-template-columns: 0 minmax(0, 1fr) var(--right-w, 340px); }
+#screen-editor.right-collapsed { grid-template-columns: var(--left-w, 250px) minmax(0, 1fr) 0; }
+#screen-editor.left-collapsed.right-collapsed { grid-template-columns: 0 minmax(0, 1fr) 0; }
+.side-left { border-right: 1px solid var(--border); overflow: hidden; position: relative; }
+.side-right { border-left: 1px solid var(--border); overflow: hidden; position: relative; }
+/* Границу боковой панели можно тянуть мышью; двойной щелчок возвращает обычную ширину */
+.resizer { position: absolute; top: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 5; }
+.side-left > .resizer { right: 0; }
+.side-right > .resizer { left: 0; }
+.resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: var(--ai); opacity: 0; transition: opacity .12s; }
+.resizer:hover::after, .resizer.dragging::after { opacity: .9; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing #page { pointer-events: none; }
 
 .outline { padding: 8px; }
 .outline-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--radius-sm); background: none; text-align: left; color: var(--text-muted); font-size: 13px; }
@@ -439,6 +447,6 @@ table.data tbody tr:not(.total):hover td { background: var(--bg-hover); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 @media (max-width: 1360px) {
-  #screen-editor.active { grid-template-columns: 220px 1fr 310px; }
+  #screen-editor { --left-w: 220px; --right-w: 310px; }
   .quick-search { width: 200px; }
 }

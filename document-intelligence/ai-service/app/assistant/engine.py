@@ -206,7 +206,16 @@ def _period_label(ctx: dict, in_form: bool = False) -> str:
 
 
 def _clean_refs(text: str, count: int) -> str:
-    """Убирает из ответа модели ссылки на несуществующие источники."""
+    """Убирает из ответа модели ссылки на несуществующие источники. Диапазоны и списки («[7–11]», «[2, 5]»)
+    разворачиваются в отдельные ссылки."""
+    def spread(m):
+        nums = []
+        for part in re.split(r"\s*,\s*", m.group(1)):
+            a, _, b = re.sub(r"\s*[–—-]\s*", "-", part).partition("-")
+            lo, hi = int(a), int(b or a)
+            nums += list(range(lo, min(hi, lo + 30) + 1)) if hi >= lo else [lo]
+        return "".join(f"[{n}]" for n in nums)
+    text = re.sub(r"\[(\d+(?:\s*[–—,-]\s*\d+)+)\]", spread, text)
     return re.sub(r"\[(\d+)\]", lambda m: m.group(0) if 1 <= int(m.group(1)) <= count else "", text).strip()
 
 
@@ -227,6 +236,10 @@ NOT_STATED = re.compile(r"не указан|нет прямого ответа|�
 def _tidy(text: str) -> str:
     """Приводит ответ модели в порядок: дежурное «в документе это не указано» после содержательного ответа убирается,
     а если весь ответ — «не указано», у него не остаётся ссылок на источники (ссылаться не на что)."""
+    text = text.strip()
+    if text and not re.search(r"[.!?…»)\]]$", text):          # модель упёрлась в предел длины
+        whole = re.match(r"(?s)(.*[.!?](?:\s*\[\d+\])*)", text)
+        text = whole.group(1) if whole and len(whole.group(1)) > 20 else text + "…"
     parts = [x.strip() for x in re.split(r"(?<=[.!?])\s+(?=[А-ЯЁA-Z«])", text.strip()) if x.strip()]
     solid = [x for x in parts if not (NOT_STATED.search(x) and len(x.split()) <= 8)]
     if solid and len(solid) < len(parts):
@@ -237,11 +250,11 @@ def _tidy(text: str) -> str:
     return text.strip()
 
 
-def _ask_llm(llm, question: str, facts: List[str], task: str, count: int) -> Optional[str]:
+def _ask_llm(llm, question: str, facts: List[str], task: str, count: int, max_tokens: int = 260) -> Optional[str]:
     if not llm or not llm.status().get("available"):
         return None
     prompt = f"Вопрос пользователя: {question}\n\nДанные из базы документов:\n" + "\n".join(facts) + f"\n\n{task}"
-    out = llm.generate(SYSTEM, prompt, max_tokens=260)
+    out = llm.generate(SYSTEM, prompt, max_tokens=max_tokens)
     return _tidy(_clean_refs(out, count)) if out else None
 
 
@@ -278,15 +291,16 @@ def _fragments(blocks: List[str], terms: set, limit: int = 8, width: int = 600, 
         sim = float(sims[i]) if sims is not None and i < len(sims) else 0.0
         bonus = 5 * (sim - SIM_FLOOR + 0.1) if sim >= SIM_FLOOR else 0.0
         if hits or bonus:
-            scored.append((len({s for s, _, _ in hits}) + bonus, len(hits), i, hits))
+            scored.append((len({s for s, _, _ in hits}) + bonus, len(hits), i, hits, sim))
     scored.sort(key=lambda x: (-x[0], -x[1], x[2]))
     out = []
-    for score, _, i, hits in scored[:limit]:
+    for score, _, i, hits, sim in scored[:limit]:
         text = blocks[i]
         first = hits[0][1] if hits else 0
         a = 0 if len(text) <= width else max(0, min(first - width // 4, len(text) - width))
         cut = text[a:a + width].strip()
         out.append({"block": i, "start": hits[0][1] if hits else None, "end": hits[0][2] if hits else None, "score": round(score, 2),
+                    "words": len({s for s, _, _ in hits}), "sim": round(sim, 3),
                     "text": ("…" if a else "") + cut + ("…" if a + width < len(text) else "")})
     out.sort(key=lambda f: f["block"])
     return out
@@ -294,6 +308,87 @@ def _fragments(blocks: List[str], terms: set, limit: int = 8, width: int = 600, 
 
 HEADING = re.compile(r"^\s*(?:\d+(?:\.\d+)*[.)]|раздел|глава|статья|приложение)\s", re.IGNORECASE)
 WHOLE_DOC = 5000          # документ короче этого уходит в модель целиком
+SECTION_CHARS = 1500      # столько текста раздела уходит в модель вместе с его заголовком
+CONTEXT_CHARS = 3600      # всего текста документа в одном вопросе: больше — ответ на процессоре идёт дольше 20 с
+DOC_TASK = ("Ответь на вопрос по сути в 2–5 предложениях: перескажи своими словами, что об этом сказано в документе, "
+            "с конкретикой — перечисли элементы, условия, сроки, суммы. Не отвечай названием раздела вместо его содержания. "
+            "После каждого утверждения ставь номер фрагмента, например [2]. Если спрашивают про перечень (сколько, какие, список) — "
+            "перечисли все подходящие пункты по оглавлению, у каждого пункта поставь номер его фрагмента. "
+            "Если во фрагментах нет ответа именно на этот вопрос, "
+            "ответь одной фразой «В документе это не указано» и ничего не пересказывай.")
+
+
+def _with_sections(blocks: List[str], frags: List[dict]) -> List[dict]:
+    """Если к вопросу подошёл заголовок раздела, в модель уходит и текст раздела — иначе она ответит одним заголовком.
+    Разворачиваются два самых подходящих заголовка; абзацы, попавшие внутрь развёрнутого раздела, отдельно не дублируются."""
+    heads = [i for i, b in enumerate(blocks) if b.strip() and len(b.strip()) < 90 and HEADING.match(b)]
+    if not heads:
+        return frags
+    nxt = {h: (heads[k + 1] if k + 1 < len(heads) else len(blocks)) for k, h in enumerate(heads)}
+    covered = set()
+    # заголовок разворачиваем, только если он подошёл словами вопроса или заметно близок по смыслу
+    strong = [f for f in frags if f["block"] in nxt and (f.get("words") or f.get("sim", 0) >= 0.5)]
+    for f in sorted(strong, key=lambda f: -f["score"])[:2]:
+        h = f["block"]
+        body, size = [], 0
+        for i in range(h + 1, nxt[h]):
+            text = " ".join(blocks[i].split())
+            if not text:
+                continue
+            if size + len(text) > SECTION_CHARS:
+                body.append(text[:max(0, SECTION_CHARS - size)] + "…")
+                covered.add(i)
+                break
+            body.append(text)
+            size += len(text)
+            covered.add(i)
+        if body:
+            title = blocks[h].strip()
+            f["quote"] = title
+            f["text"] = f"Раздел «{title}». Содержание раздела: " + "; ".join(x.rstrip(".;") for x in body)
+            f["section"] = True
+    out = [f for f in frags if f["block"] not in covered or f.get("section")]
+    # не выходим за размер контекста: сначала убираем наименее подходящие абзацы
+    while len(out) > 1 and sum(len(f["text"]) for f in out) > CONTEXT_CHARS:
+        out.remove(min(out, key=lambda f: (bool(f.get("section")), f["score"])))
+    return out
+
+
+def _with_outline(blocks: List[str], frags: List[dict]) -> List[dict]:
+    """Добавляет к выбранным местам оглавление — заголовки разделов отдельными фрагментами со своими номерами.
+    Так модель видит строение всего документа, может перечислить разделы и сослаться на каждый."""
+    have = {f["block"] for f in frags}
+    heads = [i for i, b in enumerate(blocks) if b.strip() and len(b.strip()) < 90 and HEADING.match(b)][:30]
+    extra = [{"block": i, "start": None, "end": None, "score": 0, "outline": True, "quote": blocks[i].strip(),
+              "text": "Заголовок раздела: " + blocks[i].strip()} for i in heads if i not in have]
+    return sorted(frags + extra, key=lambda f: f["block"])
+
+
+def _fix_heading_refs(text: str, frags: List[dict]) -> str:
+    """Поправляет ссылки рядом с названиями разделов. Модель иногда ставит после названия его номер из заголовка
+    («2. Экран «Обзор» [2]») или одну общую ссылку на целый перечень разделов («…, экран «Поиск» и настройки [7–11]»).
+    Одиночная ссылка вплотную за названием заменяется на фрагмент этого раздела; группа ссылок после перечня —
+    на фрагменты всех разделов, названных в этом перечне."""
+    titles = [(re.sub(r"^\s*\d+(?:\.\d+)*[.)]\s*", "", f.get("quote") or "").lower(), f["n"])
+              for f in frags if f.get("outline") or f.get("section")]
+    titles = [(t, n) for t, n in titles if len(t) >= 5]
+    if not titles:
+        return text
+    out, last = [], 0
+    for m in re.finditer(r"(?:\[\d+\]\s*)+", text):
+        seg_start = max(last, text.rfind(". ", 0, m.start()) + 1)
+        seg = text[seg_start:m.start()].lower()
+        found = sorted((seg.rfind(t), n, t) for t, n in titles if t in seg)
+        run = re.findall(r"\[(\d+)\]", m.group(0))
+        tail = m.group(0)[len(m.group(0).rstrip()):]
+        refs = m.group(0)
+        if len(run) > 1 and found:
+            refs = "".join(f"[{n}]" for n in dict.fromkeys(n for _, n, _ in found)) + tail
+        elif len(run) == 1 and found and found[-1][0] + len(found[-1][2]) >= len(seg) - 15:
+            refs = f"[{found[-1][1]}]" + tail
+        out.append(text[last:m.start()] + refs)
+        last = m.end()
+    return "".join(out) + text[last:]
 
 
 def ask_document(question: str, doc_id: int, index, llm=None) -> dict:
@@ -312,23 +407,22 @@ def ask_document(question: str, doc_id: int, index, llm=None) -> dict:
         frags = [{**(by_block.get(i) or {"block": i, "start": None, "end": None, "score": 0}), "text": blocks[i].strip()} for i in filled]
         note = "Прочитал документ целиком"
     else:
-        frags = matched
-        note = f"Выбрал {len(frags)} {_plural(len(frags), ('подходящий абзац', 'подходящих абзаца', 'подходящих абзацев'))} из {len(filled)}"
+        frags = _with_outline(blocks, _with_sections(blocks, matched))
+        picked = len([f for f in frags if not f.get("outline")])
+        note = f"Выбрал {picked} {_plural(picked, ('подходящее место', 'подходящих места', 'подходящих мест'))} из {len(filled)} абзацев и оглавление"
+        if any(f.get("section") for f in frags):
+            note += ", подходящие разделы прочитал целиком"
     for n, f in enumerate(frags, 1):
         f["n"] = n
     steps = [note]
     facts = [f"[{f['n']}] {f['text']}" for f in frags]
-    heads = [b.strip() for b in blocks if len(b.strip()) < 90 and HEADING.match(b)]
-    if heads and len(frags) < len(filled):
-        facts.append("Заголовки разделов документа по порядку: " + "; ".join(heads[:40]))
 
     generated = None
     if facts:
-        generated = _ask_llm(llm, question, facts,
-                             "Ответь на вопрос по этому документу в 1–3 предложениях. После каждого утверждения ставь номер фрагмента, "
-                             "например [2]. Если прямого ответа во фрагментах нет — так и напиши.", len(frags))
+        generated = _ask_llm(llm, question, facts, DOC_TASK, len(frags), max_tokens=420)
     best = sorted([f for f in frags if f["score"]], key=lambda f: -f["score"])[:3]
     if generated:
+        generated = _fix_heading_refs(generated, frags)
         cited = {int(n) for n in re.findall(r"\[(\d+)\]", generated)}
         used = [f for f in frags if f["n"] in cited] or sorted(best[:2], key=lambda f: f["block"])
         summary = generated
@@ -342,7 +436,7 @@ def ask_document(question: str, doc_id: int, index, llm=None) -> dict:
         return {**base, "found": False, "steps": steps + ["Подходящих мест нет"], "sources": [], "generated": False,
                 "summary": "В этом документе не нашёл ответа на вопрос. Попробуйте задать его другими словами."}
     sources = [{"n": f["n"], "block": f["block"], "start": f["start"], "end": f["end"],
-                "quote": f["text"][:160] + ("…" if len(f["text"]) > 160 else "")} for f in used[:6]]
+                "quote": f.get("quote") or f["text"][:160] + ("…" if len(f["text"]) > 160 else "")} for f in used[:14]]
     return {**base, "found": True, "steps": steps, "sources": sources, "summary": summary, "generated": bool(generated)}
 
 
