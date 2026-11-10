@@ -319,7 +319,7 @@ function searchDocs() {
   const words = srch.q.toLowerCase().replace(/ё/g, 'е').split(/[^a-zа-я0-9-]+/i).filter((w) => w.length >= 3 && !['для', 'все', 'как', 'что', 'где', 'это'].includes(w));
   if (!words.length) return [];
   const res = [];
-  for (const d of liveDocs()) {
+  for (const d of DEMO.docs.filter((x) => !x.deleted)) {      // документы из базы ищет сервер
     const hay = (d.title + ' ' + d.text + ' ' + d.cp).toLowerCase().replace(/ё/g, 'е');
     let exact = 0, sem = 0;
     const terms = [];
@@ -356,27 +356,29 @@ function renderSearch() {
   const scr = $('#screen-search');
   if (!scr.dataset.built) {
     scr.dataset.built = '1';
-    const typeList = [...new Set(DEMO.docs.map((d) => d.type))];
     scr.innerHTML = `
       <aside class="panel facets"><div class="panel-head"><span class="panel-title">Фильтры</span><button class="btn ghost small" id="f-reset">Сбросить</button></div>
         <div class="scroll">
-          <div class="facet"><div class="facet-title">Тип документа</div>${typeList.map((t) => `<label><input type="checkbox" class="cb" data-ft="${t}">${t}<span class="c" data-fc="${t}"></span></label>`).join('')}</div>
-          <div class="facet"><div class="facet-title">Год</div><select id="f-year"><option value="">Любой</option><option>2025</option><option>2024</option></select></div>
-          <div class="facet"><div class="facet-title">Контрагент</div><select id="f-cp"><option value="">Любой</option>${DEMO.counterparties.map((c) => `<option>${esc(c[0])}</option>`).join('')}</select></div>
+          <div class="facet" id="f-types"><div class="facet-title">Тип документа</div></div>
+          <div class="facet"><div class="facet-title">Год</div><select id="f-year"><option value="">Любой</option><option>2026</option><option>2025</option><option>2024</option></select></div>
+          <div class="facet"><div class="facet-title">Контрагент</div><select id="f-cp"><option value="">Любой</option></select></div>
           <div class="facet"><div class="facet-title">Сумма, ₽</div><div class="range"><input type="text" id="f-min" placeholder="от"><input type="text" id="f-max" placeholder="до"></div></div>
         </div></aside>
       <section class="srch">
         <div class="srch-head">
           <label class="srch-box">${icon('search', '')}<input id="s-q" placeholder="Что найти? Например: неустойка за просрочку, аренда помещения"><span class="kbd">Enter</span></label>
           <div class="srch-opts"><div class="seg" id="s-mode"><button data-m="words">По словам</button><button data-m="sem">По смыслу</button></div>
-            <span>Где: <b>вся база</b> · ${DEMO.docs.length} документа</span><span id="s-count" style="margin-left:auto"></span></div>
+            <span id="s-where"></span><span id="s-count" style="margin-left:auto"></span></div>
         </div>
         <div class="srch-results"><div class="srch-inner" id="s-res"></div></div>
       </section>`;
     const q = $('#s-q');
     q.oninput = () => { srch.q = q.value; renderHits(); };
     $$('#s-mode button').forEach((b) => b.onclick = () => { srch.mode = b.dataset.m; renderHits(); });
-    $$('[data-ft]', scr).forEach((c) => c.onchange = () => { c.checked ? srch.types.add(c.dataset.ft) : srch.types.delete(c.dataset.ft); renderHits(); });
+    $('#f-types').addEventListener('change', (e) => {
+      const c = e.target.closest('[data-ft]');
+      if (c) { c.checked ? srch.types.add(c.dataset.ft) : srch.types.delete(c.dataset.ft); renderHits(); }
+    });
     $('#f-year').onchange = (e) => { srch.year = e.target.value; renderHits(); };
     $('#f-cp').onchange = (e) => { srch.cp = e.target.value; renderHits(); };
     $('#f-min').oninput = (e) => { srch.min = e.target.value.replace(/\D/g, ''); renderHits(); };
@@ -389,33 +391,92 @@ function renderSearch() {
     };
     $('#s-res').addEventListener('click', (e) => {
       const p = e.target.closest('[data-preset]');
-      if (p) { srch.q = $('#s-q').value = p.dataset.preset; renderHits(); }
+      if (p) { srch.q = $('#s-q').value = p.dataset.preset; renderHits(); return; }
+      const r = e.target.closest('[data-real-hit]');
+      if (r) openRealDoc(+r.dataset.realHit, r.dataset.block != null ? { block: +r.dataset.block, start: +r.dataset.start, end: +r.dataset.end } : null);
     });
   }
+  if (!REAL.loaded) refreshReal().then(() => { if ($('#screen-search').classList.contains('active')) renderHits(); });
   renderHits();
   setTimeout(() => $('#s-q').focus(), 0);
 }
 
-function renderHits() {
+// Фильтры строятся по документам, которые реально есть: из базы и (если включены) демонстрационным
+function renderFacets(counts) {
+  const docs = liveDocs();
+  const types = [...new Set(docs.map((d) => d.type))].sort();
+  $('#f-types').innerHTML = `<div class="facet-title">Тип документа</div>` + types.map((t) =>
+    `<label><input type="checkbox" class="cb" data-ft="${esc(t)}" ${srch.types.has(t) ? 'checked' : ''}>${esc(t)}<span class="c">${counts ? counts[t] || '' : docs.filter((d) => d.type === t).length}</span></label>`).join('');
+  const cps = [...new Set([...REAL.docs.flatMap((d) => d.parties || []), ...(showDemo() ? DEMO.counterparties.map((c) => c[0]) : [])])].sort();
+  const sel = $('#f-cp');
+  if (sel.dataset.sig !== cps.join('|')) {
+    sel.dataset.sig = cps.join('|');
+    sel.innerHTML = `<option value="">Любой</option>` + cps.map((c) => `<option ${srch.cp === c ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  }
+  $('#s-where').innerHTML = `Где: <b>вся база</b> · ${docs.length} ${plural(docs.length, 'документ', 'документа', 'документов')}`;
+}
+
+// Фрагмент найденного текста с подсветкой (смещения считает сервер)
+function snippetHTML(s) {
+  let html = '', pos = 0;
+  for (const [a, b] of s.highlights) {
+    if (a < pos) continue;
+    html += esc(s.text.slice(pos, a)) + '<mark>' + esc(s.text.slice(a, b)) + '</mark>';
+    pos = b;
+  }
+  html += esc(s.text.slice(pos));
+  return (s.prefix ? '… ' : '') + html + (s.suffix ? ' …' : '');
+}
+
+async function realSearch() {
+  if (!API.online || !srch.q.trim()) return [];
+  const p = new URLSearchParams({ q: srch.q, mode: srch.mode });
+  if (srch.year) { p.set('from', `${srch.year}-01-01`); p.set('to', `${srch.year}-12-31`); }
+  if (srch.cp) p.set('cp', srch.cp);
+  if (srch.min) p.set('min', srch.min);
+  if (srch.max) p.set('max', srch.max);
+  const hits = await API.search(p);
+  return hits.map((h) => ({ d: mapReal(h.document), exact: h.exact, snippets: h.snippets }))
+    .filter(({ d }) => !srch.types.size || srch.types.has(d.type));
+}
+
+let searchSeq = 0;
+async function renderHits() {
   $$('#s-mode button').forEach((b) => b.classList.toggle('on', b.dataset.m === srch.mode));
   const box = $('#s-res');
+  const seq = ++searchSeq;
   if (!srch.q.trim()) {
     $('#s-count').textContent = '';
-    $$('[data-fc]').forEach((s) => { s.textContent = DEMO.docs.filter((d) => d.type === s.dataset.fc && !d.deleted).length; });
+    renderFacets(null);
     box.innerHTML = `<div class="label" style="margin-top:6px">Частые запросы</div><div class="followups">
       ${['неустойка за просрочку', 'аренда помещения', 'охрана труда', 'бюджет на декабрь', 'назначение директора', 'закупка оргтехники']
         .map((p) => `<button class="chip" data-preset="${p}">${icon('search')}${p}</button>`).join('')}</div>`;
     return;
   }
-  const hits = searchDocs();
+  let real = [];
+  let realError = '';
+  try { real = await realSearch(); } catch (e) { realError = e.message; }
+  if (seq !== searchSeq) return;                   // пока ждали сервер, запрос уже изменился
+  const demo = showDemo() ? searchDocs() : [];
+  const total = real.length + demo.length;
   const counts = {};
-  hits.forEach(({ d }) => { counts[d.type] = (counts[d.type] || 0) + 1; });
-  $$('[data-fc]').forEach((s) => { s.textContent = counts[s.dataset.fc] || ''; });
-  $('#s-count').textContent = `${hits.length} ${plural(hits.length, 'документ', 'документа', 'документов')}`;
+  [...real, ...demo].forEach(({ d }) => { counts[d.type] = (counts[d.type] || 0) + 1; });
+  renderFacets(counts);
+  $('#s-count').textContent = `${total} ${plural(total, 'документ', 'документа', 'документов')}`;
   const question = /\?$|^(какие|какой|сколько|кто|когда|где|почему|утвержд)/i.test(srch.q.trim());
-  box.innerHTML = (question || !hits.length ? `<div class="ask-card" data-ask-global="${esc(srch.q)}"><span class="ai-mark">${icon('spark')}</span>
+  const realHTML = real.map(({ d, exact, snippets }) => {
+    const first = snippets[0];
+    return `<div class="hit" data-real-hit="${d.realId}" ${first ? `data-block="${first.block}" data-start="${first.start}" data-end="${first.end}"` : ''}>
+      <div class="hit-top"><span class="hit-title">${esc(d.title)}</span><span class="tag ai" style="font-size:11.5px">из базы</span>
+        <span class="match ${exact ? 'exact' : 'sem'}">${exact ? 'точное совпадение' : 'по смыслу'}</span></div>
+      <div class="hit-meta">${d.type} · ${d.date}${d.cp !== '—' ? ' · ' + esc(d.cp) : ''}${d.amount ? ' · ' + rub(d.amount) : ''}</div>
+      ${snippets.map((s) => `<div class="hit-snip">${snippetHTML(s)}</div>`).join('')}</div>`;
+  }).join('');
+  box.innerHTML = (realError ? `<div class="qi-note">${icon('alert')}<span>Поиск по базе недоступен: ${esc(realError)}</span></div>` : '') +
+    (question || !total ? `<div class="ask-card" data-ask-global="${esc(srch.q)}"><span class="ai-mark">${icon('spark')}</span>
       <span>Похоже на вопрос. <b>Спросить ассистента:</b> «${esc(srch.q)}» — он найдёт документы, посчитает суммы и покажет источники.</span></div>` : '') +
-    (hits.length ? hits.map(({ d, exact, terms }) => `<div class="hit" data-doc="${d.id}">
+    realHTML +
+    (total ? demo.map(({ d, exact, terms }) => `<div class="hit" data-doc="${d.id}">
       <div class="hit-top"><span class="hit-title">${esc(d.title)}</span><span class="match ${exact ? 'exact' : 'sem'}">${exact ? 'точное совпадение' : 'по смыслу'}</span></div>
       <div class="hit-meta">${d.type} · ${d.date}${d.cp !== '—' ? ' · ' + esc(d.cp) : ''}${d.amount ? ' · ' + rub(d.amount) : ''}</div>
       <div class="hit-snip">${snippet(d, terms)}</div></div>`).join('')
@@ -486,6 +547,7 @@ function settingsBody() {
       const used = mem.reduce((s, m) => s + m[1], 0);
       return `<h1>Искусственный интеллект</h1><div class="lead">Всё работает на этом компьютере, без интернета. На этом ПК найдено 16 ГБ памяти — рекомендован профиль «Стандарт».</div>
         <div class="profiles">${Object.entries(P).map(([k, p]) => `<button class="profile ${setState.profile === k ? 'on' : ''}" data-profile="${k}"><b>${p[0]}</b><span class="muted">${p[1]}</span><span class="faint" style="font-size:12.5px">${p[2]} · ${p[3]}</span></button>`).join('')}</div>
+        <div class="box"><div class="box-head"><span>Языковая модель на этом компьютере</span></div><div class="kv" id="llm-status"><span class="k">Состояние</span><span>Проверяю…</span></div></div>
         <div class="box"><div class="box-head"><span>Память приложения</span><span>${used.toFixed(1).replace('.', ',')} из ${String(limit).replace('.', ',')} ГБ</span></div><div class="mem">
           <div class="mem-bar">${mem.map((m) => `<span style="width:${m[1] / limit * 100}%;background:${m[2]}"></span>`).join('')}</div>
           <div class="mem-legend">${mem.map((m) => `<span><i style="background:${m[2]}"></i>${m[0]} — ${String(m[1]).replace('.', ',')} ГБ</span>`).join('')}</div></div></div>
@@ -548,6 +610,25 @@ function bindSettings(scr) {
   if (demo) demo.onchange = () => { store.set('showDemo', demo.checked ? 'on' : 'off'); toast(demo.checked ? 'Демонстрационные документы показаны' : 'Демонстрационные документы скрыты'); };
   const srv = $('#srv-status', scr);
   if (srv) refreshReal().then(serverStatusHTML).then((h) => { srv.innerHTML = h; });
+  const llm = $('#llm-status', scr);
+  if (llm) {
+    // настоящее состояние модели: файл .gguf в папке ai-service/models и библиотека llama.cpp
+    API.assistantStatus().then((st) => {
+      const state = st.available ? (st.loaded ? 'загружена в память' : 'подключена, загрузится при первом вопросе ассистенту') : 'не подключена';
+      llm.innerHTML = `<span class="k">Состояние</span><span class="svc"><span class="sev-dot ${st.available ? 'ok' : 'warning'}"></span>${state}</span>`
+        + (st.model ? `<span class="k">Файл модели</span><span>${esc(st.model)}</span>` : '')
+        + (st.reason ? `<span class="k">Причина</span><span>${esc(st.reason)}</span>` : '')
+        + (st.available ? '' : '<span class="k">Что это значит</span><span>Ассистент работает: списки и суммы считаются точно, а вывод составляется по шаблону.</span>');
+      // поиск по смыслу: отпечатки абзацев считаются в фоне, изменённые абзацы — заново, остальные берутся готовыми
+      const se = st.search;
+      if (se) {
+        const state = !se.available ? 'не подключён — поиск работает по словам и синонимам'
+          : se.pending ? `индексация: готово ${se.ready} из ${se.blocks} абзацев` : `готов · ${se.blocks} ${plural(se.blocks, 'абзац', 'абзаца', 'абзацев')}`;
+        llm.innerHTML += `<span class="k">Поиск по смыслу</span><span class="svc"><span class="sev-dot ${se.available && !se.pending ? 'ok' : 'warning'}"></span>${state}</span>`
+          + (se.model ? `<span class="k">Модель поиска</span><span>${esc(se.model)}</span>` : '');
+      }
+    }).catch(() => { llm.innerHTML = '<span class="k">Состояние</span><span class="svc"><span class="sev-dot warning"></span>нет связи с сервером Documentum</span>'; });
+  }
   const th = $('#ui-theme', scr);
   if (th) { th.value = document.documentElement.dataset.theme; th.onchange = () => setTheme(th.value); }
 }

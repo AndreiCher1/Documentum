@@ -93,6 +93,39 @@ public class Document {
     @Column(name = "checked_at")
     private LocalDateTime checkedAt;
 
+    // Поля карточки, извлечённые из текста (для фильтров, реестра и сводок)
+    @Column(name = "doc_number", length = 100)
+    private String docNumber;
+
+    @Column(name = "doc_date")
+    private java.time.LocalDate docDate;
+
+    @Column(name = "amount")
+    private Double amount;
+
+    @Column(name = "counterparties", length = 1000)
+    private String counterparties;
+
+    @Column(name = "valid_until")
+    private java.time.LocalDate validUntil;
+
+    @Column(name = "fields_json", columnDefinition = "TEXT")
+    @JsonIgnore
+    private String fieldsJson;
+
+    public String getDocNumber() { return docNumber; }
+    public void setDocNumber(String v) { this.docNumber = v; }
+    public java.time.LocalDate getDocDate() { return docDate; }
+    public void setDocDate(java.time.LocalDate v) { this.docDate = v; }
+    public Double getAmount() { return amount; }
+    public void setAmount(Double v) { this.amount = v; }
+    public String getCounterparties() { return counterparties; }
+    public void setCounterparties(String v) { this.counterparties = v; }
+    public java.time.LocalDate getValidUntil() { return validUntil; }
+    public void setValidUntil(java.time.LocalDate v) { this.validUntil = v; }
+    public String getFieldsJson() { return fieldsJson; }
+    public void setFieldsJson(String v) { this.fieldsJson = v; }
+
     public Document() {
     }
 

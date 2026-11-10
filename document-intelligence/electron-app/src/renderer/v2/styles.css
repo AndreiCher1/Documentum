@@ -247,6 +247,7 @@ svg.i.sm { width: 15px; height: 15px; }
 .page .sug.hover, .page .note.hover { box-shadow: 0 0 0 2px rgba(74, 141, 255, .45); }
 .page .sug.active, .page .note.active { box-shadow: 0 0 0 2px var(--critical); }
 .page .flash { animation: flash 1.2s ease; }
+.page mark.search-hit { background: #ffe58a; color: inherit; border-radius: 2px; box-shadow: 0 0 0 2px #ffe58a; }
 @keyframes flash { 0%, 40% { background: #ffe58a; } 100% { background: transparent; } }
 .page.view-final .sug del, .page.view-final .sug { box-shadow: none; }
 .page.view-final .sug del { display: none; }

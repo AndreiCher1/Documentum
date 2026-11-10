@@ -31,7 +31,8 @@ public final class EditorDtos {
             Integer currentVersion,
             List<VersionMeta> versions,
             List<String> warnings,
-            CheckResult lastCheck
+            CheckResult lastCheck,
+            com.fasterxml.jackson.databind.JsonNode fields
     ) {
     }
 
@@ -56,11 +57,28 @@ public final class EditorDtos {
             Integer checkCritical,
             Integer checkWarning,
             Integer checkInfo,
-            LocalDateTime checkedAt
+            LocalDateTime checkedAt,
+            String number,
+            java.time.LocalDate docDate,
+            Double amount,
+            List<String> counterparties,
+            java.time.LocalDate validUntil
     ) {
     }
 
+    /** Фрагмент найденного текста: номер блока, текст и подсветка (смещения внутри text). */
+    public record SearchSnippet(int block, String text, boolean prefix, boolean suffix, List<List<Integer>> highlights, int start, int end) {
+    }
+
+    /** Результат поиска: документ (как в реестре), релевантность и фрагменты. */
+    public record SearchHit(RegistryItem document, double score, boolean exact, List<SearchSnippet> snippets) {
+    }
+
     public record VersionContent(Integer number, String source, String description, LocalDateTime createdAt, String html) {
+    }
+
+    /** Вопрос ассистенту. context — то, что вернул прошлый ответ (нужно для уточнений). */
+    public record AssistantRequest(String question, com.fasterxml.jackson.databind.JsonNode context, Long docId) {
     }
 
     public record DraftRequest(String html) {

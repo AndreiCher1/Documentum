@@ -62,9 +62,13 @@ const API = (() => {
     saveVersion: async (id, html, description, source) => (await req(`/api/editor/documents/${id}/versions`, json('POST', { html, description, source }))).json(),
     version: async (id, n) => (await req(`/api/editor/documents/${id}/versions/${n}`)).json(),
     rename: (id, title) => req(`/api/editor/documents/${id}`, json('PATCH', { title })),
+    search: async (params) => (await req(`/api/editor/documents/search?${params}`, {}, 30000)).json(),
     checkDoc: async (id, html) => (await req(`/api/editor/documents/${id}/check`, json('POST', { html }), 60000)).json(),
     exportDocx: async (id, html) => (await req(`/api/editor/documents/${id}/export/docx`, json('POST', { html }), 120000)).blob(),
     remove: (id) => req(`/api/documents/${id}`, { method: 'DELETE' }),
+    // языковая модель на процессоре может отвечать долго — ждём до 5 минут
+    assistant: async (question, context, docId = null) => (await req('/api/editor/documents/assistant', json('POST', { question, context, docId }), 300000)).json(),
+    assistantStatus: async () => (await req('/api/editor/documents/assistant/status', {}, 5000)).json(),
   };
 })();
 
@@ -97,8 +101,12 @@ function relTime(iso) {
 function mapReal(it) {
   const [type, folder] = TYPE_UI[it.documentType] || ['Прочее', 'Прочее'];
   if (!DEMO.folders.includes(folder)) DEMO.folders.push(folder);
+  const parties = it.counterparties || [];
   return {
-    id: 'r' + it.id, realId: it.id, real: true, type, folder, title: it.title, date: fmtDate(it.createdAt), cp: '—', amount: 0,
+    id: 'r' + it.id, realId: it.id, real: true, type, folder, title: it.title,
+    // дата и контрагент — из текста документа (если найдены), иначе дата загрузки
+    date: fmtDate(it.docDate || it.createdAt), cp: parties[0] || '—', parties, amount: it.amount || 0,
+    number: it.number, validUntil: it.validUntil,
     status: 'Проект', issues: it.checkedAt ? [it.checkCritical || 0, it.checkWarning || 0, it.checkInfo || 0] : null,
     modified: relTime(it.updatedAt), tags: [], text: '', version: it.currentVersion, filename: it.originalFilename,
   };
@@ -124,7 +132,7 @@ async function refreshReal() {
 function cleanHTML(root = page) {
   const c = root.cloneNode(true);
   c.querySelectorAll('.sug').forEach((s) => { const d = s.querySelector('del'); s.replaceWith(...(d ? d.childNodes : [])); });
-  c.querySelectorAll('.note, [data-rid]').forEach((s) => s.replaceWith(...s.childNodes));
+  c.querySelectorAll('.note, [data-rid], mark.search-hit').forEach((s) => s.replaceWith(...s.childNodes));
   // пустые теги начертания, оставшиеся после пометок, не должны считаться изменением текста
   c.querySelectorAll('b,i,u,s,strong,em,span').forEach((el) => { if (!el.textContent && !el.querySelector('br,img')) el.remove(); });
   c.normalize();
@@ -134,7 +142,8 @@ function cleanHTML(root = page) {
   return c.innerHTML;
 }
 
-async function openRealDoc(id) {
+// focus — место из поиска: { block, start, end } — документ откроется на нём с подсветкой
+async function openRealDoc(id, focus = null) {
   if (!ed.real) { ed.demoHTML = page.innerHTML; ed.demoTitle = $('#doc-title').textContent; }
   go('editor');
   page.innerHTML = '<p style="text-indent:0;color:#888">Открываю документ…</p>';
@@ -145,7 +154,8 @@ async function openRealDoc(id) {
     tmp.innerHTML = doc.hasUnsavedDraft ? (await API.version(id, doc.currentVersion)).html : doc.html;
     const base = cleanHTML(tmp);
     ed.real = { id, title: doc.title, typeName: doc.documentTypeName, filename: doc.originalFilename, size: doc.fileSize,
-      created: doc.createdAt, versions: doc.versions, current: doc.currentVersion, baseHTML: base, cache: { [doc.currentVersion]: base } };
+      created: doc.createdAt, versions: doc.versions, current: doc.currentVersion, baseHTML: base, cache: { [doc.currentVersion]: base },
+      fields: doc.fields || null };
     page.innerHTML = doc.html || '<p><br></p>';
     if (doc.lastCheck) setFindings(doc.lastCheck);
     $('#doc-title').textContent = doc.title;
@@ -153,6 +163,7 @@ async function openRealDoc(id) {
     setSaveState(doc.hasUnsavedDraft ? 'Черновик восстановлен' : 'Сохранено');
     ed.msgEdited = false;
     renderReview();
+    if (focus) showFound(focus);
     if (doc.warnings?.length) toast(doc.warnings.join(' '));
   } catch (e) {
     page.innerHTML = `<p style="text-indent:0;color:#b42318">Не удалось открыть документ: ${esc(e.message)}</p>`;
@@ -184,21 +195,53 @@ function realOnInput() {
   }, 1200);
 }
 
+// Подсветка найденного места: слово в абзаце помечается, абзац прокручивается в центр
+function showFound({ block, start, end }) {
+  page.querySelectorAll('mark.search-hit').forEach((m) => m.replaceWith(...m.childNodes));
+  const el = pageBlocks()[block];
+  if (!el) return;
+  const range = start != null && end > start ? rangeInText(el, start, end) : null;
+  if (range) {
+    try {
+      const mark = document.createElement('mark');
+      mark.className = 'search-hit';
+      mark.append(range.extractContents());
+      range.insertNode(mark);
+    } catch { /* пересекается с пометкой проверки — просто прокрутим */ }
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  // подсветка снимается при первом действии в документе
+  const clear = () => { page.querySelectorAll('mark.search-hit').forEach((m) => m.replaceWith(...m.childNodes)); page.normalize(); };
+  page.addEventListener('mousedown', clear, { once: true });
+  page.addEventListener('keydown', clear, { once: true });
+}
+
 function realLeft(tab) {
   const body = $('#left-body');
   if (tab === 'outline') {
+    pageBlocks().forEach((el, i) => { el.dataset.bid = 'rb' + i; });     // те же метки, что у находок проверки
     const heads = $$('h1, h2, h3', page);
-    heads.forEach((h, i) => { h.dataset.bid = 'rh' + i; });
-    body.innerHTML = heads.length ? `<div class="outline">${heads.map((h, i) =>
-      `<button class="outline-item ${h.tagName === 'H1' ? 'title' : ''}" data-go="rh${i}" style="padding-left:${8 + (+h.tagName[1] - 1) * 10}px">${esc(h.textContent.trim().slice(0, 80))}</button>`).join('')}</div>`
+    body.innerHTML = heads.length ? `<div class="outline">${heads.map((h) =>
+      `<button class="outline-item ${h.tagName === 'H1' ? 'title' : ''}" data-go="${h.dataset.bid}" style="padding-left:${8 + (+h.tagName[1] - 1) * 10}px">${esc(h.textContent.trim().slice(0, 80))}</button>`).join('')}</div>`
       : `<div class="empty" style="padding:24px 16px"><span style="font-size:13px">В документе нет заголовков. Задайте их кнопкой «Стиль абзаца» на панели.</span></div>`;
   } else {
     const r = ed.real;
     const size = r.size > 1e6 ? (r.size / 1e6).toFixed(1).replace('.', ',') + ' МБ' : Math.max(1, Math.round(r.size / 1e3)) + ' КБ';
-    body.innerHTML = `<div class="fields">${[['Тип', r.typeName], ['Исходный файл', r.filename], ['Размер файла', size], ['Загружен', fmtDate(r.created)],
-      ['Текущая версия', String(r.current)], ['Всего версий', String(r.versions.length)]].map(([k, v]) =>
-      `<div class="field"><div class="k">${k}</div><div class="v">${esc(v || '—')}</div></div>`).join('')}</div>
-      <div class="faint" style="padding:0 16px 16px;font-size:12.5px">Извлечение реквизитов, сумм и сроков в карточку появится вместе с проверкой документов.</div>`;
+    const f = r.fields || {};
+    const field = (k, v, cls = '') => `<div class="field"><div class="k">${k}</div><div class="v ${cls}">${v}</div></div>`;
+    const fromText = [
+      field('Номер', esc(f.number || '—')),
+      field('Дата документа', f.date ? fmtDate(f.date) : '—'),
+      field('Контрагенты', f.counterparties?.length ? f.counterparties.map(esc).join('<br>') : '—'),
+      field('Сумма', f.amount ? rub(f.amount) : '—'),
+      field('Действует до', f.validUntil ? fmtDate(f.validUntil) : '—'),
+      ...(f.inns || []).map((i) => field('ИНН', `${i.value}${i.valid ? '' : ' — неверная контрольная сумма'}`, i.valid ? '' : 'bad')),
+    ].join('');
+    body.innerHTML = `<div class="label" style="padding:12px 16px 0">Из текста документа</div><div class="fields">${fromText}</div>
+      <div class="label" style="padding:4px 16px 0">Файл и версии</div>
+      <div class="fields">${[['Тип', r.typeName], ['Исходный файл', r.filename], ['Размер файла', size], ['Загружен', fmtDate(r.created)],
+      ['Текущая версия', String(r.current)], ['Всего версий', String(r.versions.length)]].map(([k, v]) => field(k, esc(v || '—'))).join('')}</div>`;
   }
 }
 
@@ -587,3 +630,102 @@ async function serverStatusHTML() {
 }
 
 refreshReal();
+
+/* -------------------------------------------------------------------------
+   Ассистент по настоящей базе: сервер отбирает документы и считает суммы,
+   здесь — только показ. Каждая строка и ссылка [n] открывает документ на месте цитаты.
+   ------------------------------------------------------------------------- */
+async function realPlan(q) {
+  if (!REAL.loaded) await refreshReal();
+  if (!API.online || !REAL.docs.length) return null;
+  let res;
+  try { res = await API.assistant(q, chat.rctx || null); } catch (e) { console.warn(e); return null; }
+  // в настоящей базе ответа нет — пусть ответит демо-сценарий, если демо-данные включены
+  if (!res.found && showDemo()) return null;
+  if (res.context) chat.rctx = res.context;
+  return { real: true, miss: !res.found, steps: res.steps || [], render: (el, scroll) => renderRealAnswer(res, el, scroll) };
+}
+
+const ruDate = (iso) => (iso ? iso.slice(0, 10).split('-').reverse().join('.') : '—');
+
+function realAnswerCell(key, r) {
+  if (key === 'title') {
+    const sub = r.snippet && r.quote ? r.quote : [r.typeName, r.number ? '№ ' + r.number : ''].filter(Boolean).join(' · ');
+    return `<td><span class="doc-link" data-rn="${r.n}">${esc(r.title)}</span>${sub ? `<div class="faint" style="font-size:12px">${esc(sub)}</div>` : ''}</td>`;
+  }
+  if (key === 'date') return `<td>${ruDate(r.date)}</td>`;
+  if (key === 'party') return `<td>${esc(r.party || '—')}</td>`;
+  if (key === 'validUntil') {
+    const left = r.daysLeft;
+    const when = left == null ? '' : left < 0 ? 'срок прошёл' : left === 0 ? 'сегодня' : `через ${left} ${plural(left, 'день', 'дня', 'дней')}`;
+    return `<td>${ruDate(r.validUntil)}${when ? `<div class="faint" style="font-size:12px">${when}</div>` : ''}</td>`;
+  }
+  if (key === 'check') {
+    const sev = r.critical ? 'critical' : r.warning ? 'warning' : 'ok';
+    const text = r.critical ? `${r.critical} критичных` : r.warning ? `${r.warning} ${plural(r.warning, 'замечание', 'замечания', 'замечаний')}` : 'Без замечаний';
+    return `<td><span class="tag ${sev}"><span class="sev-dot ${sev}"></span>${text}</span></td>`;
+  }
+  if (key === 'amount') return `<td class="num"${r.quote && !r.snippet ? ` title="${esc(r.quote)}"` : ''}>${r.amount ? rub(Math.round(r.amount)) : '—'}</td>`;
+  return '<td></td>';
+}
+
+async function renderRealAnswer(res, el, scroll) {
+  const ans = el.closest('.answer');
+  const rows = res.table?.rows || [];
+  ans._rows = Object.fromEntries(rows.map((r) => [r.n, r]));
+  const mark = (s) => esc(s).replace(/\{([^}]*)\}/g, '<span class="num">$1</span>');
+  const withRefs = (s) => esc(s).replace(/\[(\d+)\]/g, (m, n) => (ans._rows[n] ? `<span class="ref" data-rn="${n}">${n}</span>` : ''));
+  const LABEL = { title: 'Документ', date: 'Дата', party: 'Контрагент', validUntil: 'Действует до', check: 'Проверка', amount: 'Сумма' };
+  let html = '';
+  if (res.headline) html += `<div class="headline">${mark(res.headline)}</div>`;
+  if (res.filters?.length) html += `<div class="scope-chips">${res.filters.map((f) => `<span class="chip filter">${esc(f)}</span>`).join('')}</div>`;
+
+  if (res.kind === 'brief' && res.card) {
+    html += `<div class="box"><div class="box-head"><span>Карточка документа</span><span class="doc-link" data-rn="1">Открыть в редакторе</span></div>
+      <table class="data"><tbody>${res.card.map(([k, v]) => `<tr><td class="faint" style="width:160px">${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table></div>`;
+  } else if (res.groups) {
+    const total = res.table.total;
+    html += `<div class="box"><div class="box-head"><span>По контрагентам</span><span>${total ? rub(Math.round(total)) : ''}</span></div>
+      <table class="data"><thead><tr><th>Контрагент</th><th class="num">Документов</th>${total ? '<th class="num">Доля</th><th class="num">Сумма</th>' : ''}</tr></thead><tbody>
+      ${res.groups.map((g) => `<tr><td>${esc(g.group)} ${g.refs.map((n) => `<span class="ref" data-rn="${n}">${n}</span>`).join('')}</td><td class="num">${g.count}</td>
+        ${total ? `<td class="num">${g.share ?? 0} %</td><td class="num">${g.amount ? rub(Math.round(g.amount)) : '—'}</td>` : ''}</tr>`).join('')}
+      </tbody></table></div>`;
+  } else if (rows.length) {
+    const cols = res.table.columns;
+    html += `<div class="box"><div class="box-head"><span>Документы-источники</span><span>Нажмите на документ — он откроется на нужном месте</span></div>
+      <table class="data"><thead><tr><th>#</th>${cols.map((c) => `<th${c === 'amount' ? ' class="num"' : ''}>${LABEL[c]}</th>`).join('')}</tr></thead><tbody>
+      ${rows.map((r) => `<tr><td><span class="ref" data-rn="${r.n}">${r.n}</span></td>${cols.map((c) => realAnswerCell(c, r)).join('')}</tr>`).join('')}
+      ${res.table.total ? `<tr class="total"><td></td><td>Итого</td>${cols.slice(1, -1).map(() => '<td></td>').join('')}<td class="num">${rub(Math.round(res.table.total))}</td></tr>` : ''}
+      </tbody></table></div>`;
+  }
+  html += '<div class="summary"></div>';
+  el.innerHTML = html;
+  scroll();
+
+  const sum = $('.summary', el);
+  await typeInto(sum, res.summary || '', 10);
+  sum.innerHTML = withRefs(res.summary || '');
+
+  const note = res.generated
+    ? `Вывод сформулирован языковой моделью${res.llm?.model ? ' ' + esc(res.llm.model) : ''}. Список документов и суммы взяты из самих документов.`
+    : (res.found ? 'Список документов и суммы взяты из самих документов. Языковая модель не подключена — вывод составлен по шаблону.' : '');
+  ans._copy = [res.headline ? res.headline.replace(/[{}]/g, '') : '', ...rows.map((r) => `${r.n}. ${r.title}${r.amount ? ' — ' + rub(Math.round(r.amount)) : ''}`), res.summary || ''].filter(Boolean).join('\n');
+  el.insertAdjacentHTML('beforeend',
+    (res.alerts?.length ? `<div class="alerts">${res.alerts.map((a) => `<div class="alert">${icon('alert')}<span>${withRefs(a)}</span></div>`).join('')}</div>` : '')
+    + (res.followups?.length ? `<div class="followups">${res.followups.map((f) => `<button class="chip ai" data-ask="${esc(f)}">${esc(f)}</button>`).join('')}</div>` : '')
+    + (res.found ? `<div class="actions-row"><button class="btn small" data-copy-answer>${icon('copy')}Копировать</button></div>` : '')
+    + (note ? `<div class="faint" style="font-size:12px">${note}</div>` : ''));
+  scroll();
+}
+
+$('#chat').addEventListener('click', (e) => {
+  const ans = e.target.closest('.answer');
+  if (!ans) return;
+  if (e.target.closest('[data-copy-answer]')) {
+    navigator.clipboard?.writeText(ans._copy || '').then(() => toast('Ответ скопирован'), () => toast('Не удалось скопировать'));
+    return;
+  }
+  const link = e.target.closest('[data-rn]');
+  const r = link && ans._rows?.[link.dataset.rn];
+  if (r) openRealDoc(r.id, r.block != null ? { block: r.block, start: r.start, end: r.end } : null);
+});
