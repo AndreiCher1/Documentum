@@ -406,6 +406,50 @@ $('#expand-left').onclick = () => { screenEd.classList.remove('left-collapsed');
 $('#collapse-right').onclick = () => { screenEd.classList.add('right-collapsed'); syncPanels(); };
 $('#expand-right').onclick = () => { screenEd.classList.remove('right-collapsed'); syncPanels(); };
 
+// Боковые панели редактора раздвигаются мышью за границу; ширина запоминается, двойной щелчок возвращает обычную
+(function panelResizers() {
+  const SIDES = { left: { panel: '.side-left', prop: '--left-w', min: 180, max: 480, key: 'ed-left-w' },
+    right: { panel: '.side-right', prop: '--right-w', min: 280, max: 760, key: 'ed-right-w' } };
+  const CENTER_MIN = 420;                       // документу всегда остаётся место
+  const store = (fn) => { try { return fn(); } catch (e) { return null; } };
+  Object.entries(SIDES).forEach(([side, cfg]) => {
+    const panel = $(cfg.panel, screenEd);
+    if (!panel) return;
+    const saved = +store(() => localStorage.getItem(cfg.key));
+    if (saved >= cfg.min && saved <= cfg.max) screenEd.style.setProperty(cfg.prop, saved + 'px');
+    const grip = document.createElement('div');
+    grip.className = 'resizer';
+    grip.title = 'Потяните, чтобы изменить ширину панели. Двойной щелчок — обычная ширина';
+    panel.appendChild(grip);
+    grip.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      store(() => grip.setPointerCapture(e.pointerId));
+      grip.classList.add('dragging');
+      document.body.classList.add('resizing');
+      const startX = e.clientX;
+      const startW = panel.getBoundingClientRect().width;
+      const other = $(SIDES[side === 'left' ? 'right' : 'left'].panel, screenEd).getBoundingClientRect().width;
+      const room = screenEd.getBoundingClientRect().width - other - CENTER_MIN;
+      let width = startW;
+      const move = (ev) => {
+        const delta = side === 'left' ? ev.clientX - startX : startX - ev.clientX;
+        width = Math.round(Math.max(cfg.min, Math.min(cfg.max, room, startW + delta)));
+        screenEd.style.setProperty(cfg.prop, width + 'px');
+      };
+      const up = () => {
+        grip.removeEventListener('pointermove', move);
+        grip.classList.remove('dragging');
+        document.body.classList.remove('resizing');
+        store(() => localStorage.setItem(cfg.key, width));
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', up, { once: true });
+      grip.addEventListener('pointercancel', up, { once: true });
+    });
+    grip.addEventListener('dblclick', () => { screenEd.style.removeProperty(cfg.prop); store(() => localStorage.removeItem(cfg.key)); });
+  });
+})();
+
 // Повторная проверка — показывает этапы, как будет в рабочей версии
 $('#run-check').onclick = async () => {
   if (ed.real) { realRunCheck(); return; }
@@ -464,9 +508,10 @@ async function askDoc(q) {
   msgs.insertAdjacentHTML('beforeend', `<div class="bubble user">${esc(q)}</div>`);
   const holder = document.createElement('div');
   holder.className = 'bubble bot';
-  holder.innerHTML = `<div class="steps"><div class="step"><span class="spin"></span>Читаю договор…</div></div>`;
+  holder.innerHTML = `<div class="steps"><div class="step"><span class="spin"></span>Читаю документ…</div></div>`;
   msgs.appendChild(holder);
   holder.scrollIntoView({ block: 'end' });
+  if (ed.real) { await askRealDoc(q, holder); return; }
   await sleep(900);
   const hit = docAnswer(q);
   if (!hit) {
@@ -477,7 +522,35 @@ async function askDoc(q) {
   await typeInto(holder, hit.a, 12);
   holder.insertAdjacentHTML('beforeend', '<div>' + hit.cites.map(([t, bid]) => `<button class="cite" data-cite="${bid}">${icon('file')}${t}</button>`).join('') + '</div>');
 }
-$('#doc-msgs').addEventListener('click', (e) => { const c = e.target.closest('[data-cite]'); if (c) scrollToBlock(c.dataset.cite); });
+// Вопрос по настоящему документу: сервер выбирает абзацы, модель отвечает, ссылки ведут к месту в тексте
+async function askRealDoc(q, holder) {
+  let res;
+  try {
+    res = await API.assistant(q, null, ed.real.id);
+  } catch (e) {
+    holder.textContent = 'Не удалось получить ответ: ' + e.message;
+    return;
+  }
+  const src = Object.fromEntries((res.sources || []).map((s) => [s.n, s]));
+  holder._src = src;
+  holder.innerHTML = '';
+  await typeInto(holder, (res.summary || '').replace(/\s*\[\d+\]/g, ''), 10);
+  holder.innerHTML = esc(res.summary || '').replace(/\[(\d+)\]/g, (m, n) => (src[n] ? `<span class="ref" data-src="${n}">${n}</span>` : ''));
+  if (res.sources?.length) {
+    holder.insertAdjacentHTML('beforeend', '<div class="faint" style="font-size:12px;margin-top:8px">Источники в документе:</div><div>' + res.sources.map((s) => `<button class="cite" data-src="${s.n}" title="${esc(s.quote)}">${icon('file')}${esc(s.quote.slice(0, 42))}${s.quote.length > 42 ? '…' : ''}</button>`).join('') + '</div>');
+  }
+  if (res.found) {
+    holder.insertAdjacentHTML('beforeend', `<div class="faint" style="font-size:12px;margin-top:6px">${res.generated ? 'Ответ сформулирован языковой моделью по тексту документа — сверяйте с источником.' : 'Языковая модель не подключена — показаны подходящие места.'}</div>`);
+  }
+  holder.scrollIntoView({ block: 'end' });
+}
+$('#doc-msgs').addEventListener('click', (e) => {
+  const s = e.target.closest('[data-src]');
+  const place = s && s.closest('.bubble')?._src?.[s.dataset.src];
+  if (place) { showFound(place); return; }
+  const c = e.target.closest('[data-cite]');
+  if (c) scrollToBlock(c.dataset.cite);
+});
 $('#doc-suggest').innerHTML = DEMO.docQA.map((x) => `<button class="chip ai" data-dq="${esc(x.q)}">${esc(x.q)}</button>`).join('');
 $('#doc-suggest').addEventListener('click', (e) => { const c = e.target.closest('[data-dq]'); if (c) askDoc(c.dataset.dq); });
 bindComposer('#doc-input', '#doc-send', askDoc);
@@ -718,7 +791,7 @@ $('#history-list').addEventListener('click', (e) => {
 });
 
 function newChat() {
-  chat.ctx = null; chat.title = '';
+  chat.ctx = null; chat.rctx = null; chat.mode = null; chat.title = '';
   renderHistory(null);
   $('#chat').innerHTML = `<div class="welcome"><span class="ai-mark" style="width:44px;height:44px;border-radius:12px">${icon('spark', '')}</span>
     <h2>Что найти в документах?</h2><div class="muted">Ассистент ищет по всей базе, считает суммы и показывает, откуда взят каждый ответ.</div>
@@ -754,10 +827,18 @@ async function ask(q) {
   box.appendChild(ans);
   const scroll = () => { $('#chat-scroll').scrollTop = $('#chat-scroll').scrollHeight; };
 
-  const plan = route(q);
   ans.innerHTML = `<div class="answer-head"><span class="ai-mark">${icon('spark')}</span>Ассистент</div><div class="st"></div><div class="body" style="display:grid;gap:14px"></div>`;
   const st = $('.st', ans);
-  for (let i = 0; i <= plan.steps.length; i++) { st.innerHTML = stepsHTML(plan.steps, i); scroll(); if (i < plan.steps.length) await sleep(520); }
+  st.innerHTML = stepsHTML(['Ищу в базе документов'], 0);
+  scroll();
+  // Сначала настоящая база (real.js), демо-сценарии — если в базе ответа нет.
+  // Уточнение к демо-ответу («за декабрь») остаётся в демо-сценарии.
+  const real = typeof realPlan === 'function' ? realPlan : async () => null;
+  let plan;
+  if (chat.mode === 'demo') { plan = route(q); if (plan.miss) plan = (await real(q)) || plan; }
+  else plan = (await real(q)) || route(q);
+  if (plan.real) chat.mode = 'real'; else if (!plan.miss) chat.mode = 'demo';
+  for (let i = 0; i <= plan.steps.length; i++) { st.innerHTML = stepsHTML(plan.steps, i); scroll(); if (i < plan.steps.length) await sleep(plan.real ? 180 : 520); }
   await plan.render($('.body', ans), scroll);
   scroll();
 }
@@ -919,6 +1000,7 @@ function ordersAnswer() {
 
 function notFound(q) {
   return {
+    miss: true,
     steps: ['Ищу по словам и по смыслу во всех документах'],
     async render(el) {
       const d = document.createElement('div');

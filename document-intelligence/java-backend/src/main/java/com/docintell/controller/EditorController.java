@@ -24,6 +24,8 @@ import java.util.List;
  * POST   /api/editor/documents/{id}/versions    — сохранить версию
  * GET    /api/editor/documents/{id}/versions/{n}— текст версии
  * POST   /api/editor/documents/{id}/export/docx — выгрузить DOCX
+ * POST   /api/editor/documents/assistant        — вопрос ассистенту по базе
+ * GET    /api/editor/documents/assistant/status — состояние языковой модели
  */
 @RestController
 @RequestMapping("/api/editor/documents")
@@ -33,6 +35,34 @@ public class EditorController {
 
     public EditorController(EditorService editorService) {
         this.editorService = editorService;
+    }
+
+    /**
+     * Поиск: q — запрос (может быть пустым), mode — words | sem, фильтры по полям карточки.
+     * types — названия типов через запятую («Договор,Приказ»), from/to — период, cp — часть названия контрагента.
+     */
+    @GetMapping("/search")
+    public List<SearchHit> search(@RequestParam(defaultValue = "") String q,
+                                  @RequestParam(defaultValue = "words") String mode,
+                                  @RequestParam(required = false) List<String> types,
+                                  @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate from,
+                                  @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate to,
+                                  @RequestParam(required = false) String cp,
+                                  @RequestParam(required = false) Double min,
+                                  @RequestParam(required = false) Double max) {
+        return editorService.search(q, mode, types, from, to, cp, min, max);
+    }
+
+    /** Вопрос ассистенту по базе документов. */
+    @PostMapping(value = "/assistant", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public com.fasterxml.jackson.databind.JsonNode assistant(@RequestBody AssistantRequest request) {
+        return editorService.askAssistant(request);
+    }
+
+    /** Подключена ли языковая модель. */
+    @GetMapping("/assistant/status")
+    public com.fasterxml.jackson.databind.JsonNode assistantStatus() {
+        return editorService.assistantStatus();
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

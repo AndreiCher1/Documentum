@@ -32,6 +32,7 @@ from pydantic import BaseModel
 from app.editor.converter import convert_to_html, UnsupportedFormatError
 from app.editor.exporter import html_to_docx
 from app.checks.engine import check_html
+from app.search.fields import extract_fields
 from app.preprocessing.pipeline import DocumentPreprocessor
 from app.ocr.factory import get_ocr_engine
 from app.classifier.factory import get_document_classifier
@@ -452,6 +453,92 @@ class CheckRequest(BaseModel):
 def editor_check(request: CheckRequest):
     """Проверка текста документа по правилам: реквизиты, суммы, даты, нумерация, шаблон, орфография."""
     return check_html(request.html, request.documentType)
+
+
+_search_index = None
+
+
+def search_index():
+    """Индекс создаётся при первом обращении; файл — ai-service/data/search.db."""
+    global _search_index
+    if _search_index is None:
+        import os
+        from app.search.index import SearchIndex
+        base = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+        from app.search.embed import local_embedder
+        _search_index = SearchIndex(os.path.join(base, "search.db"), local_embedder)
+    return _search_index
+
+
+class IndexRequest(BaseModel):
+    id: int
+    title: str = ""
+    html: str
+
+
+class SearchRequest(BaseModel):
+    q: str
+    mode: str = "words"
+    ids: list[int] | None = None
+    limit: int = 50
+
+
+class SyncRequest(BaseModel):
+    ids: list[int]
+
+
+@app.post("/search/index")
+def search_index_document(request: IndexRequest):
+    """Добавляет или обновляет документ в поисковом индексе и возвращает поля карточки."""
+    search_index().upsert(request.id, request.title, request.html)
+    return {"fields": extract_fields(request.html)}
+
+
+@app.delete("/search/index/{doc_id}")
+def search_remove_document(doc_id: int):
+    search_index().remove(doc_id)
+    return {"removed": doc_id}
+
+
+@app.post("/search/query")
+def search_query(request: SearchRequest):
+    return {"results": search_index().search(request.q, request.mode, request.ids, request.limit)}
+
+
+@app.post("/search/sync")
+def search_sync(request: SyncRequest):
+    """Сверка с базой: убирает лишние документы и сообщает, каких не хватает в индексе."""
+    idx = search_index()
+    removed = idx.keep_only(request.ids)
+    missing = [i for i in request.ids if i not in idx.docs]
+    return {"removed": removed, "missing": missing, **idx.stats()}
+
+
+class AssistantRequest(BaseModel):
+    question: str
+    context: dict | None = None
+    docs: list[dict] = []
+    docId: int | None = None      # вопрос по одному открытому документу
+
+
+@app.post("/assistant/ask")
+def assistant_ask(request: AssistantRequest):
+    """Вопрос к базе документов. docs — карточки из базы (их присылает сервер данных), текст берётся из индекса."""
+    from app.assistant.engine import answer
+    from app.assistant.llm import local_llm
+    return answer(request.question, request.context, request.docs, search_index(), local_llm, doc_id=request.docId)
+
+
+@app.get("/assistant/status")
+def assistant_status():
+    """Подключена ли языковая модель и какая."""
+    from app.assistant.llm import local_llm
+    return {**local_llm.status(), "search": search_index().embed_status()}
+
+
+@app.post("/editor/fields")
+def editor_fields(request: CheckRequest):
+    return extract_fields(request.html)
 
 
 @app.post("/editor/export-docx")

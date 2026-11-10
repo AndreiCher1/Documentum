@@ -163,6 +163,62 @@ public class AiServiceClient {
         }
     }
 
+    /** Индексирует документ для поиска; в ответе — поля карточки ({"fields": {...}}). */
+    public com.fasterxml.jackson.databind.JsonNode indexDocument(Long id, String title, String html) {
+        return restTemplate.postForObject(aiServiceUrl + "/search/index",
+                java.util.Map.of("id", id, "title", title == null ? "" : title, "html", html == null ? "" : html),
+                com.fasterxml.jackson.databind.JsonNode.class);
+    }
+
+    public void removeFromIndex(Long id) {
+        restTemplate.delete(aiServiceUrl + "/search/index/" + id);
+    }
+
+    /** Сверка индекса с базой: в ответе — missing (каких документов не хватает). */
+    public com.fasterxml.jackson.databind.JsonNode syncIndex(java.util.List<Long> ids) {
+        return restTemplate.postForObject(aiServiceUrl + "/search/sync", java.util.Map.of("ids", ids),
+                com.fasterxml.jackson.databind.JsonNode.class);
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode search(String q, String mode, java.util.List<Long> ids, int limit) {
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("q", q);
+        body.put("mode", mode);
+        body.put("ids", ids);
+        body.put("limit", limit);
+        try {
+            return restTemplate.postForObject(aiServiceUrl + "/search/query", body, com.fasterxml.jackson.databind.JsonNode.class);
+        } catch (RestClientException e) {
+            logger.error("Ошибка при вызове AI-сервиса /search/query: {}", e.getMessage());
+            throw new com.docintell.exception.ConversionException("Поиск недоступен: сервис анализа не отвечает");
+        }
+    }
+
+    /** Вопрос ассистенту по базе: карточки документов передаём мы, текст AI-сервис берёт из индекса. */
+    public com.fasterxml.jackson.databind.JsonNode askAssistant(String question, com.fasterxml.jackson.databind.JsonNode context,
+                                                                java.util.List<java.util.Map<String, Object>> docs, Long docId) {
+        java.util.Map<String, Object> body = new java.util.HashMap<>();
+        body.put("question", question == null ? "" : question);
+        body.put("context", context == null || context.isNull() ? null : context);
+        body.put("docs", docs);
+        body.put("docId", docId);
+        try {
+            return restTemplate.postForObject(aiServiceUrl + "/assistant/ask", body, com.fasterxml.jackson.databind.JsonNode.class);
+        } catch (RestClientException e) {
+            logger.error("Ошибка при вызове AI-сервиса /assistant/ask: {}", e.getMessage());
+            throw new com.docintell.exception.ConversionException("Ассистент недоступен: сервис анализа не отвечает");
+        }
+    }
+
+    /** Состояние языковой модели ({"available", "model", "reason"}). */
+    public com.fasterxml.jackson.databind.JsonNode assistantStatus() {
+        try {
+            return restTemplate.getForObject(aiServiceUrl + "/assistant/status", com.fasterxml.jackson.databind.JsonNode.class);
+        } catch (RestClientException e) {
+            throw new com.docintell.exception.ConversionException("Сервис анализа не отвечает");
+        }
+    }
+
     /** Собирает DOCX из HTML редактора (AI-сервис /editor/export-docx). */
     public byte[] exportDocx(String html, String title) {
         try {

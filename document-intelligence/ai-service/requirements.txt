@@ -18,3 +18,4 @@ pyclipper==1.4.0
 python-bidi==0.6.11
 requests==2.34.2
 PyYAML==6.0.2
+llama-cpp-python==0.3.36  # готовая сборка: --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu

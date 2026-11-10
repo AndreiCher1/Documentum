@@ -37,9 +37,11 @@ public class DocumentController {
     private static final Logger logger = LoggerFactory.getLogger(DocumentController.class);
 
     private final DocumentService documentService;
+    private final com.docintell.service.EditorService editorService;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(DocumentService documentService, com.docintell.service.EditorService editorService) {
         this.documentService = documentService;
+        this.editorService = editorService;
     }
 
     /**
@@ -150,6 +152,7 @@ public class DocumentController {
     public ResponseEntity<Void> deleteDocument(@PathVariable Long id) {
         logger.info("Запрос на удаление документа с ID: {}", id);
         documentService.deleteDocument(id);
+        editorService.removeFromIndex(id);      // удалённый документ не должен находиться поиском
         return ResponseEntity.noContent().build();
     }
 

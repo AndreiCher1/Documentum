@@ -116,6 +116,7 @@ public class EditorService {
 
         addVersion(doc, converted.html(), DocumentVersion.Source.IMPORT, "Загружен файл «" + file.getOriginalFilename() + "»");
         logger.info("Документ {} импортирован в редактор: «{}», тип {}", doc.getId(), doc.getTitle(), doc.getDocumentType());
+        indexContent(doc, converted.html());
         autoCheck(doc, converted.html());
         return toEditorDocument(doc, converted.warnings());
     }
@@ -134,6 +135,7 @@ public class EditorService {
                 }
                 addVersion(doc, converted.html(), DocumentVersion.Source.IMPORT, "Загружен файл «" + doc.getOriginalFilename() + "»");
                 warnings = converted.warnings();
+                indexContent(doc, converted.html());
                 autoCheck(doc, converted.html());
             } catch (IOException e) {
                 throw new IllegalStateException("Исходный файл документа не найден", e);
@@ -146,10 +148,190 @@ public class EditorService {
     public List<RegistryItem> list() {
         return documentRepository.findAll().stream()
                 .sorted((a, b) -> b.getUpdatedAt().compareTo(a.getUpdatedAt()))
-                .map(d -> new RegistryItem(d.getId(), titleOf(d), d.getDocumentType().name(), d.getDocumentType().getDisplayName(),
-                        d.getOriginalFilename(), d.getFileSize(), d.getCreatedAt(), d.getUpdatedAt(), versionRepository.findMaxNumber(d.getId()),
-                        d.getCheckCritical(), d.getCheckWarning(), d.getCheckInfo(), d.getCheckedAt()))
+                .map(this::registryItem)
                 .toList();
+    }
+
+    private RegistryItem registryItem(Document d) {
+        List<String> parties = d.getCounterparties() == null || d.getCounterparties().isBlank()
+                ? List.of() : List.of(d.getCounterparties().split("; "));
+        return new RegistryItem(d.getId(), titleOf(d), d.getDocumentType().name(), d.getDocumentType().getDisplayName(),
+                d.getOriginalFilename(), d.getFileSize(), d.getCreatedAt(), d.getUpdatedAt(), versionRepository.findMaxNumber(d.getId()),
+                d.getCheckCritical(), d.getCheckWarning(), d.getCheckInfo(), d.getCheckedAt(),
+                d.getDocNumber(), d.getDocDate(), d.getAmount(), parties, d.getValidUntil());
+    }
+
+    // ------------------------------------------------------------------ поиск
+
+    /**
+     * Поиск по документам. Сначала фильтр по полям карточки (тип, период, контрагент, сумма),
+     * затем — полнотекстовый поиск по оставшимся. Пустой запрос возвращает отфильтрованный список.
+     */
+    /** После старта сервера сверяем индекс в фоне: AI-сервис поднимается дольше, поэтому несколько попыток. */
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void syncIndexOnStartup() {
+        Thread t = new Thread(() -> {
+            for (int attempt = 0; attempt < 24 && !ensureIndexed(); attempt++) {
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "search-index-sync");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    @Transactional
+    public List<SearchHit> search(String q, String mode, List<String> typeNames, java.time.LocalDate from, java.time.LocalDate to,
+                                  String counterparty, Double minAmount, Double maxAmount) {
+        ensureIndexed();
+        List<Document> docs = documentRepository.findAll().stream()
+                .filter(d -> typeNames == null || typeNames.isEmpty() || typeNames.contains(d.getDocumentType().getDisplayName()) || typeNames.contains(d.getDocumentType().name()))
+                .filter(d -> from == null || (dateOf(d) != null && !dateOf(d).isBefore(from)))
+                .filter(d -> to == null || (dateOf(d) != null && !dateOf(d).isAfter(to)))
+                .filter(d -> counterparty == null || counterparty.isBlank()
+                        || (d.getCounterparties() != null && d.getCounterparties().toLowerCase(Locale.ROOT).contains(counterparty.toLowerCase(Locale.ROOT))))
+                .filter(d -> minAmount == null || (d.getAmount() != null && d.getAmount() >= minAmount))
+                .filter(d -> maxAmount == null || (d.getAmount() != null && d.getAmount() <= maxAmount))
+                .toList();
+        java.util.Map<Long, Document> byId = new java.util.HashMap<>();
+        docs.forEach(d -> byId.put(d.getId(), d));
+        if (q == null || q.isBlank()) {
+            return docs.stream().sorted((a, b) -> b.getUpdatedAt().compareTo(a.getUpdatedAt()))
+                    .map(d -> new SearchHit(registryItem(d), 0, true, List.of())).toList();
+        }
+        if (docs.isEmpty()) {
+            return List.of();
+        }
+        com.fasterxml.jackson.databind.JsonNode res = aiServiceClient.search(q, "sem".equals(mode) ? "sem" : "words",
+                docs.stream().map(Document::getId).toList(), 50);
+        List<SearchHit> hits = new java.util.ArrayList<>();
+        for (com.fasterxml.jackson.databind.JsonNode r : res.path("results")) {
+            Document d = byId.get(r.path("id").asLong());
+            if (d == null) {
+                continue;
+            }
+            List<SearchSnippet> snippets = new java.util.ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode s : r.path("snippets")) {
+                List<List<Integer>> marks = new java.util.ArrayList<>();
+                s.path("highlights").forEach(h -> marks.add(List.of(h.get(0).asInt(), h.get(1).asInt())));
+                snippets.add(new SearchSnippet(s.path("block").asInt(), s.path("text").asText(), s.path("prefix").asBoolean(),
+                        s.path("suffix").asBoolean(), marks, s.path("start").asInt(), s.path("end").asInt()));
+            }
+            hits.add(new SearchHit(registryItem(d), r.path("score").asDouble(), r.path("exact").asBoolean(), snippets));
+        }
+        return hits;
+    }
+
+    // ------------------------------------------------------------------ ассистент
+
+    /** Вопрос к базе: отдаём AI-сервису карточки всех документов, он отбирает, считает и формулирует ответ. */
+    @Transactional
+    public com.fasterxml.jackson.databind.JsonNode askAssistant(AssistantRequest request) {
+        ensureIndexed();
+        List<java.util.Map<String, Object>> cards = new java.util.ArrayList<>();
+        // вопрос по одному открытому документу: карточки базы не нужны, текст AI-сервис берёт из индекса
+        Long docId = request == null ? null : request.docId();
+        for (Document d : docId != null ? List.<Document>of() : documentRepository.findAll()) {
+            java.util.Map<String, Object> c = new java.util.HashMap<>();
+            c.put("id", d.getId());
+            c.put("title", titleOf(d));
+            c.put("type", d.getDocumentType().name());
+            c.put("typeName", d.getDocumentType().getDisplayName());
+            c.put("number", d.getDocNumber());
+            c.put("date", d.getDocDate() == null ? null : d.getDocDate().toString());
+            c.put("created", d.getCreatedAt().toLocalDate().toString());
+            c.put("amount", d.getAmount());
+            c.put("counterparties", d.getCounterparties() == null || d.getCounterparties().isBlank()
+                    ? List.of() : List.of(d.getCounterparties().split("; ")));
+            c.put("validUntil", d.getValidUntil() == null ? null : d.getValidUntil().toString());
+            c.put("critical", nz(d.getCheckCritical()));
+            c.put("warning", nz(d.getCheckWarning()));
+            c.put("checked", d.getCheckedAt() != null);
+            cards.add(c);
+        }
+        return aiServiceClient.askAssistant(request == null ? "" : request.question(), request == null ? null : request.context(), cards, docId);
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode assistantStatus() {
+        return aiServiceClient.assistantStatus();
+    }
+
+    private static java.time.LocalDate dateOf(Document d) {
+        return d.getDocDate() != null ? d.getDocDate() : d.getCreatedAt().toLocalDate();
+    }
+
+    private volatile boolean indexSynced = false;
+
+    /**
+     * Сверка поискового индекса с базой: удаляет лишнее, дозаливает недостающие документы.
+     * Вызывается после старта сервера и перед первым поиском (AI-сервис мог перезапуститься).
+     */
+    public synchronized boolean ensureIndexed() {
+        if (indexSynced) {
+            return true;
+        }
+        try {
+            List<Long> ids = documentRepository.findAll().stream().map(Document::getId)
+                    .filter(id -> versionRepository.countByDocumentId(id) > 0).toList();
+            com.fasterxml.jackson.databind.JsonNode res = aiServiceClient.syncIndex(ids);
+            int added = 0;
+            for (com.fasterxml.jackson.databind.JsonNode m : res.path("missing")) {
+                Document d = find(m.asLong());
+                indexContent(d, currentHtml(d));
+                added++;
+            }
+            logger.info("Поисковый индекс сверен: удалено {}, добавлено {}", res.path("removed").asInt(), added);
+            indexSynced = true;
+        } catch (RuntimeException e) {
+            logger.warn("Сверка поискового индекса не выполнена: {}", e.getMessage());
+        }
+        return indexSynced;
+    }
+
+    /** Индексирует текст для поиска и сохраняет извлечённые поля карточки. Ошибка индексации не мешает работе. */
+    private void indexContent(Document doc, String html) {
+        try {
+            com.fasterxml.jackson.databind.JsonNode f = aiServiceClient.indexDocument(doc.getId(), titleOf(doc), html).path("fields");
+            doc.setFieldsJson(f.toString());
+            doc.setDocNumber(textOrNull(f, "number"));
+            doc.setDocDate(dateOrNull(f, "date"));
+            doc.setValidUntil(dateOrNull(f, "validUntil"));
+            doc.setAmount(f.hasNonNull("amount") ? f.get("amount").asDouble() : null);
+            List<String> parties = new java.util.ArrayList<>();
+            f.path("counterparties").forEach(p -> parties.add(p.asText()));
+            String joined = String.join("; ", parties);
+            doc.setCounterparties(joined.length() > 1000 ? joined.substring(0, 1000) : joined);
+            documentRepository.save(doc);
+        } catch (RuntimeException e) {
+            indexSynced = false;            // догоним при следующей сверке
+            logger.warn("Индексация документа {} не выполнена: {}", doc.getId(), e.getMessage());
+        }
+    }
+
+    private static String textOrNull(com.fasterxml.jackson.databind.JsonNode f, String key) {
+        return f.hasNonNull(key) ? f.get(key).asText() : null;
+    }
+
+    private static java.time.LocalDate dateOrNull(com.fasterxml.jackson.databind.JsonNode f, String key) {
+        try {
+            return f.hasNonNull(key) ? java.time.LocalDate.parse(f.get(key).asText()) : null;
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    /** Убрать документ из поискового индекса (при удалении). */
+    public void removeFromIndex(Long id) {
+        try {
+            aiServiceClient.removeFromIndex(id);
+        } catch (RuntimeException e) {
+            indexSynced = false;
+            logger.warn("Не удалось убрать документ {} из индекса: {}", id, e.getMessage());
+        }
     }
 
     @Transactional
@@ -169,6 +351,7 @@ public class EditorService {
         DocumentVersion v = addVersion(doc, checkHtml(request.html()), source, description);
         doc.setDraftHtml(null);
         documentRepository.save(doc);
+        indexContent(doc, v.getContentHtml());
         return meta(v);
     }
 
@@ -187,6 +370,7 @@ public class EditorService {
         Document doc = find(id);
         doc.setTitle(title.trim().length() > 500 ? title.trim().substring(0, 500) : title.trim());
         documentRepository.save(doc);
+        indexContent(doc, currentHtml(doc));       // название тоже участвует в поиске
     }
 
     /** DOCX из присланного HTML (то, что сейчас в редакторе) или из текущего содержимого. */
@@ -242,7 +426,15 @@ public class EditorService {
         return new EditorDocument(doc.getId(), titleOf(doc), doc.getDocumentType().name(), doc.getDocumentType().getDisplayName(),
                 doc.getOriginalFilename(), doc.getMimeType(), doc.getFileSize(), doc.getCreatedAt(), doc.getUpdatedAt(),
                 draft ? doc.getDraftHtml() : latest, draft, versions.isEmpty() ? 0 : versions.get(0).getNumber(),
-                versions.stream().map(this::meta).toList(), warnings == null ? List.of() : warnings, lastCheck(doc));
+                versions.stream().map(this::meta).toList(), warnings == null ? List.of() : warnings, lastCheck(doc), fieldsOf(doc));
+    }
+
+    private com.fasterxml.jackson.databind.JsonNode fieldsOf(Document doc) {
+        try {
+            return doc.getFieldsJson() == null ? null : objectMapper.readTree(doc.getFieldsJson());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return null;
+        }
     }
 
     private VersionMeta meta(DocumentVersion v) {

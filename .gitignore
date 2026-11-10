@@ -15,3 +15,7 @@ document-intelligence/java-backend/data/
 
 # Материалы презентаций — хранятся локально
 document-intelligence/docs/presentation/
+document-intelligence/ai-service/data/
+
+# Языковые модели (.gguf) — большие файлы, в git не кладём
+document-intelligence/ai-service/models/
