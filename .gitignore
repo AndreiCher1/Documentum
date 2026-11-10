@@ -19,3 +19,6 @@ document-intelligence/ai-service/data/
 
 # Языковые модели (.gguf) — большие файлы, в git не кладём
 document-intelligence/ai-service/models/
+
+# Собранная поставка (packaging\build-dist.ps1)
+dist/

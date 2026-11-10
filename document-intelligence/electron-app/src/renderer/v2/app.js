@@ -179,7 +179,7 @@ function cardHTML(f) {
   const r = ed.res[f.id];
   const sevTag = `<span class="tag ${f.ai ? 'ai' : f.severity}"><span class="sev-dot ${f.severity}"></span>${SEV_LABEL[f.severity]} · ${f.category}${f.ai ? ' · ИИ' : ''}</span>`;
   const diff = f.noteOnly ? '' : `<div class="diff-line"><span class="was">${esc(f.before)}</span>${icon('arrow')}<span class="now">${esc(f.after)}</span></div>`;
-  const src = f.source ? `<div class="card-source">${icon('file')}<span>${esc(f.source.text)} <a href="#" data-toast="Откроется «${esc(f.source.doc)}» рядом с договором">Открыть</a></span></div>` : '';
+  const src = f.source ? `<div class="card-source">${icon('file')}<span>${esc(f.source.text)} ${f.source.docId != null ? `<a href="#" data-open-source="${f.id}">Открыть</a>` : `<a href="#" data-toast="Откроется «${esc(f.source.doc)}» рядом с договором">Открыть</a>`}</span></div>` : '';
   const aiNote = f.ai ? `<div class="card-where" style="color:var(--ai)">Найдено языковой моделью — требует проверки человеком</div>` : '';
   let actions;
   if (r) {
@@ -208,7 +208,18 @@ function renderReview() {
     html += `<button class="resolved-toggle" id="toggle-resolved">${ed.showResolved ? '▾' : '▸'} Решённые (${done.length})</button>`;
     if (ed.showResolved) html += done.map(cardHTML).join('');
   }
+  // смысловая проверка моделью — отдельной кнопкой: она идёт долго и нужна не каждый раз
+  if (ed.real) {
+    const sem = ed.real.semantic;
+    const done = sem && sem.available;
+    html += `<div class="empty" style="padding:14px 12px;gap:8px"><span style="font-size:13px">${done
+      ? `Смысловая проверка выполнена${sem.chunks < sem.total ? ` для начала документа (${sem.chunks} из ${sem.total} частей)` : ''}: находок модели — ${sem.found}. Правила и сверку с базой она не заменяет.`
+      : 'Языковая модель может прочитать текст и поискать противоречия между пунктами и рискованные условия. Это занимает одну-две минуты, находки нужно перепроверять.'}</span>
+      <button class="btn small" id="deep-check">${icon('spark')}${done ? 'Повторить смысловую проверку' : 'Смысловая проверка (ИИ)'}</button></div>`;
+  }
   $('#cards').innerHTML = html;
+  const deepBtn = $('#deep-check');
+  if (deepBtn) deepBtn.onclick = () => realRunCheck(false, true);
   const t = $('#toggle-resolved');
   if (t) t.onclick = () => { ed.showResolved = !ed.showResolved; renderReview(); };
   $('#cnt-review').textContent = pending().length;
@@ -220,6 +231,13 @@ function renderReview() {
 $('#cards').addEventListener('click', (e) => {
   const act = e.target.closest('[data-act]');
   if (act) { resolve(act.dataset.id, act.dataset.act); return; }
+  const srcLink = e.target.closest('[data-open-source]');
+  if (srcLink) {                                  // документ, с которым сверена находка, — на том самом месте
+    e.preventDefault();
+    const s = FINDINGS().find((f) => f.id === srcLink.dataset.openSource)?.source;
+    if (s) openRealDoc(s.docId, s.block != null ? { block: s.block, start: s.start, end: s.end } : null);
+    return;
+  }
   const undo = e.target.closest('[data-undo]');
   if (undo) { unresolve(undo.dataset.undo); return; }
   const gt = e.target.closest('[data-goto]');

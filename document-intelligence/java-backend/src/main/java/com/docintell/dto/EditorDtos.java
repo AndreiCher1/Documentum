@@ -37,10 +37,13 @@ public final class EditorDtos {
     }
 
     /** Результат проверки по правилам. findings — как вернул AI-сервис. */
-    public record CheckResult(com.fasterxml.jackson.databind.JsonNode findings, int critical, int warning, int info, LocalDateTime checkedAt) {
+    /** semantic и cross — сведения о проходе модели и сверке с базой; есть только в ответе на только что выполненную проверку. */
+    public record CheckResult(com.fasterxml.jackson.databind.JsonNode findings, int critical, int warning, int info, LocalDateTime checkedAt,
+                              com.fasterxml.jackson.databind.JsonNode semantic, com.fasterxml.jackson.databind.JsonNode cross) {
     }
 
-    public record CheckRequest(String html) {
+    /** deep — добавить смысловую проверку языковой моделью (долго). */
+    public record CheckRequest(String html, Boolean deep) {
     }
 
     /** Строка реестра. */

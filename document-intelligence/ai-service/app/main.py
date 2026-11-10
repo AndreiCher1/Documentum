@@ -447,12 +447,16 @@ def editor_import(file: UploadFile = File(...)):
 class CheckRequest(BaseModel):
     html: str
     documentType: str = ""
+    docId: int | None = None      # номер документа в базе — для сверки с остальными документами
+    deep: bool = False            # смысловая проверка языковой моделью (долго)
 
 
 @app.post("/editor/check")
 def editor_check(request: CheckRequest):
     """Проверка текста документа по правилам: реквизиты, суммы, даты, нумерация, шаблон, орфография."""
-    return check_html(request.html, request.documentType)
+    from app.assistant.llm import local_llm
+    return check_html(request.html, request.documentType, doc_id=request.docId,
+                      index=search_index() if request.docId is not None else None, llm=local_llm, deep=request.deep)
 
 
 _search_index = None

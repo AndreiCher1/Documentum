@@ -495,6 +495,13 @@ namespace Documentum
 
         private static string ResolvePythonExecutable(string aiDir, SplashForm splash)
         {
+            // Поставка для покупателей: Python вместе с библиотеками лежит рядом с программой (папка runtime\python),
+            // на компьютере ничего ставить не нужно и интернет не требуется.
+            string bundledPyw = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime", "python", "pythonw.exe");
+            string bundledPy = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime", "python", "python.exe");
+            if (File.Exists(bundledPyw)) return bundledPyw;
+            if (File.Exists(bundledPy)) return bundledPy;
+
             string venvPy = Path.Combine(aiDir, "venv", "Scripts", "python.exe");
             string venvPyw = Path.Combine(aiDir, "venv", "Scripts", "pythonw.exe");
 
@@ -586,6 +593,10 @@ namespace Documentum
 
         private static string ResolveJavaExecutable()
         {
+            // Поставка для покупателей: своя Java лежит рядом с программой (папка runtime\jre)
+            string bundled = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime", "jre", "bin", "javaw.exe");
+            if (File.Exists(bundled)) return bundled;
+
             string javaw = FindExecutableInPath("javaw.exe");
             if (!string.IsNullOrEmpty(javaw)) return javaw;
 

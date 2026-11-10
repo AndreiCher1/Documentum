@@ -26,6 +26,12 @@ if sys.prefix == sys.base_prefix and os.path.exists(venv_python):
     result = subprocess.run([venv_python, os.path.abspath(__file__)] + sys.argv[1:])
     sys.exit(result.returncode)
 
+# Поставка для покупателей: модели распознавания сканов лежат рядом с программой (runtime\paddlex),
+# а не в профиле пользователя, — иначе при первом скане программа полезла бы за ними в интернет.
+_bundled_ocr = os.path.join(os.path.dirname(os.path.dirname(script_dir)), "runtime", "paddlex")
+if os.path.isdir(_bundled_ocr):
+    os.environ.setdefault("PADDLE_PDX_CACHE_HOME", _bundled_ocr)
+
 import uvicorn
 from app.config import settings
 

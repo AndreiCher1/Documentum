@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import calendar
+import os
 import re
 from dataclasses import dataclass, field, asdict
 from datetime import date
@@ -34,6 +35,8 @@ class Finding:
     quote: str = ""
     replacement: Optional[str] = None
     where: str = ""
+    ai: bool = False                 # находку сделала языковая модель — человеку нужно перепроверить
+    source: Optional[dict] = None    # с чем сверено: {"text", "doc", "docId", "block"} — другой документ базы
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -450,3 +453,94 @@ def spelling(ctx: Context):
         for m in re.finditer(r"\b([А-Яа-яЁё]{2,})" + SP + r"+(\1)\b", t, re.IGNORECASE):
             ctx.add("repeat", "info", "Орфография", "Слово повторяется", f"Слово «{m.group(1)}» написано дважды подряд.",
                     b, m.start(), m.end(), m.group(1))
+
+
+# ---------------------------------------------------------------------------
+# Типовые риски в условиях (без языковой модели)
+# ---------------------------------------------------------------------------
+
+PENALTY = re.compile(r"(?:неустойк|пен[яиейю]|штраф)[а-яё]*[^.;]{0,120}?(\d+(?:[.,]\d+)?)" + SP + r"*(?:%|процент[а-яё]*)", re.IGNORECASE)
+PER_DAY = re.compile(r"(?:за" + SP + r"+кажд[а-яё]+" + SP + r"+(?:[а-яё]+" + SP + r"+)?день|в" + SP + r"+день|ежедневно|за" + SP + r"+день)", re.IGNORECASE)
+CAP = re.compile(r"не" + SP + r"+более|не" + SP + r"+свыше|но" + SP + r"+не" + SP + r"+выше|максимум|в" + SP + r"+пределах", re.IGNORECASE)
+RISK_PHRASES = [
+    (r"автоматическ[а-яё]+" + SP + r"+(?:продл|пролонг)[а-яё]*|(?:продл|пролонг)[а-яё]+" + SP + r"+автоматически|считается" + SP + r"+продл[её]нн[а-яё]+",
+     "risk-auto", "Автоматическое продление",
+     "Договор продлится сам, если его вовремя не расторгнуть. Поставьте напоминание о сроке или уберите условие, если продление не нужно."),
+    (r"в" + SP + r"+одностороннем" + SP + r"+(?:внесудебном" + SP + r"+)?порядке",
+     "risk-unilateral", "Право действовать в одностороннем порядке",
+     "Одна сторона может изменить или прекратить договор без согласия другой. Проверьте, у кого это право и что получает вторая сторона."),
+    (r"(?:аванс|предоплат[а-яё]*|задат[а-яё]*|обеспечительн[а-яё]+" + SP + r"+плат[её]ж[а-яё]*)[^.;]{0,60}?не" + SP + r"+(?:возвраща|подлежит" + SP + r"+возврату)[а-яё]*",
+     "risk-no-refund", "Деньги не возвращаются",
+     "Уплаченная сумма не возвращается. Убедитесь, что случаи невозврата перечислены и они справедливы."),
+    (r"в" + SP + r"+разумн[а-яё]+" + SP + r"+срок[а-яё]*|в" + SP + r"+кратчайш[а-яё]+" + SP + r"+срок[а-яё]*|незамедлительно|по" + SP + r"+мере" + SP + r"+возможности",
+     "risk-vague-term", "Срок не определён",
+     "Срок назван словами без числа дней — при споре каждая сторона поймёт его по-своему. Лучше указать конкретный срок."),
+]
+
+
+@rule
+def risks(ctx: Context):
+    for b in ctx.blocks:
+        t = b.text
+        for m in PENALTY.finditer(t):
+            rate = float(m.group(1).replace(",", "."))
+            # «за каждый день» может стоять и до слова «пени», и после — смотрим всё предложение
+            a = max(t.rfind(".", 0, m.start()), t.rfind(";", 0, m.start())) + 1
+            ends = [x for x in (t.find(".", m.end()), t.find(";", m.end())) if x >= 0]
+            daily = bool(PER_DAY.search(t[a:min(ends) if ends else len(t)]))
+            capped = bool(CAP.search(t))
+            if daily and rate >= 0.5:
+                yearly = rate * 365
+                ctx.add("risk-penalty", "warning" if rate >= 1 else "info", "Риски", "Очень высокая неустойка",
+                        f"{m.group(1)} % в день — это {yearly:.0f} % годовых. Обычная договорная неустойка — 0,1 % в день; "
+                        "суд может снизить такую как несоразмерную, а до суда она быстро превысит сам долг."
+                        + ("" if capped else " Верхний предел не указан."), b, m.start(1), m.end())
+            elif daily and not capped and rate > 0:
+                ctx.add("risk-penalty-cap", "info", "Риски", "Неустойка без верхнего предела",
+                        "Неустойка начисляется за каждый день, а её предел не указан. Обычно пишут: «но не более 10 % от суммы».",
+                        b, m.start(1), m.end())
+        for pattern, code, title, why in RISK_PHRASES:
+            for m in re.finditer(pattern, t, re.IGNORECASE):
+                ctx.add(code, "info", "Риски", title, why, b, m.start(), m.end())
+
+
+# ---------------------------------------------------------------------------
+# Орфография по словарю
+# ---------------------------------------------------------------------------
+
+DICT_WORD = re.compile(r"(?<![A-Za-zА-Яа-яЁё0-9\-–/])[а-яё]{5,}(?![A-Za-zА-Яа-яЁё0-9\-–/]|\.[а-яё])")
+MAX_TYPOS = 30
+
+
+@rule
+def dictionary_spelling(ctx: Context):
+    """Опечатки по словарю. Проверяются только слова из строчных русских букв: фамилии, названия и сокращения словарь
+    не знает. Замечание ставится, лишь когда рядом есть известное слово, а само слово в документе больше не встречается."""
+    from app.checks.speller import check_word, speller
+    from app.search.stemmer_ru import stem
+    if not speller.available():
+        return
+    stems: Dict[str, int] = {}
+    for b in ctx.blocks:
+        for m in re.finditer(r"[А-Яа-яЁё]{4,}", b.text):
+            k = stem(m.group())
+            stems[k] = stems.get(k, 0) + 1
+    found = 0
+    for b in ctx.blocks:
+        for m in DICT_WORD.finditer(b.text):
+            word = m.group()
+            fix = check_word(word)
+            if not fix:
+                continue
+            w = word.replace("ё", "е")
+            common = len(os.path.commonprefix([w, fix]))
+            if common >= max(len(w), len(fix)) - 2:        # отличается только окончание — это форма слова, которой нет в словаре
+                continue
+            if stems.get(stem(word), 0) >= 2:              # слово (в разных формах) повторяется — это термин, а не опечатка
+                continue
+            ctx.add("spelling-dict", "info", "Орфография", "Возможная опечатка",
+                    f"Слова «{word}» нет в словаре. Похоже, имелось в виду «{fix}».", b, m.start(), m.end(), fix)
+            found += 1
+            if found >= MAX_TYPOS:
+                return
+

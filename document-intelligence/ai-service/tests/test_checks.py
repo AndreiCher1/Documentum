@@ -116,3 +116,18 @@ def test_misc_rules():
     fixes = {f["replacement"] for f in _by_rule(r, "spelling")}
     assert {"согласно договору", "в течение "} <= fixes
     assert any(f["replacement"] == "Договор" for f in _by_rule(r, "homoglyph"))
+
+
+def test_dictionary_spelling():
+    from app.checks.speller import speller
+    assert speller.available() and speller.known("наймодателем") and speller.known("неустойки") and speller.known("Счёт")
+    assert not speller.known("договр")
+    html = ("<p>Стороны заключили договр аренды, оплпта вносится ежемесячно, арендатра уведомляют заранее.</p>"
+            "<p>Наймодатель Сединкин передаёт комнату; перерасчеты делает ЕИРЦ; сканы и сканов хранятся в архиве.</p>")
+    result = check_html(html)
+    typos = {f["quote"]: f["replacement"] for f in _by_rule(result, "spelling-dict")}
+    # фамилия, сокращение, редкая форма слова и повторяющийся термин опечатками не считаются
+    assert typos == {"оплпта": "оплата", "арендатра": "арендатора"}
+    # «договр» — в списке частых ошибок: на этом месте остаётся одна пометка, от того правила
+    assert [f["replacement"] for f in _by_rule(result, "spelling") if f["quote"] == "договр"] == ["договор"]
+

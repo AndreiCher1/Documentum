@@ -210,3 +210,33 @@ def test_reference_ranges_and_heading_numbers():
         == "Есть 2. Экран «Обзор» [4] и экран «Поиск» [6]. Всего их семь [2]."
     assert _fix_heading_refs("Также есть экран «Обзор», экран «Поиск» и прочее [7][8][9].", frags) == "Также есть экран «Обзор», экран «Поиск» и прочее [4][6]."
 
+
+
+
+def test_profile_picks_model_by_memory():
+    import os
+    import tempfile
+    from app.assistant import llm
+    from app.search.embed import Embedder
+    root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(root, "light"))
+    for name in ("Big-4B.gguf", os.path.join("light", "Small-1.7B.gguf")):
+        open(os.path.join(root, name), "w").close()
+    saved = (llm.MODELS_DIR, llm.LIGHT_DIR, os.environ.get("DOCUMENTUM_PROFILE"), os.environ.pop("DOCUMENTUM_LLM_MODEL", None))
+    llm.MODELS_DIR, llm.LIGHT_DIR = root, os.path.join(root, "light")
+    try:
+        os.environ["DOCUMENTUM_PROFILE"] = "light"
+        assert os.path.basename(llm.find_model()) == "Small-1.7B.gguf" and llm.local_llm.status()["profile"] == "light"
+        assert "памяти" in (Embedder().status()["reason"] or "памяти")       # смысловой поиск на слабом ПК отключён
+        os.environ["DOCUMENTUM_PROFILE"] = "standard"
+        assert os.path.basename(llm.find_model()) == "Big-4B.gguf"
+        os.remove(os.path.join(root, "Big-4B.gguf"))
+        assert os.path.basename(llm.find_model()) == "Small-1.7B.gguf"          # обычной модели нет — берётся лёгкая
+    finally:
+        llm.MODELS_DIR, llm.LIGHT_DIR = saved[0], saved[1]
+        os.environ.pop("DOCUMENTUM_PROFILE", None)
+        if saved[2]:
+            os.environ["DOCUMENTUM_PROFILE"] = saved[2]
+        if saved[3]:
+            os.environ["DOCUMENTUM_LLM_MODEL"] = saved[3]
+

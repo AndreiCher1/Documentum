@@ -616,13 +616,14 @@ function bindSettings(scr) {
     API.assistantStatus().then((st) => {
       const state = st.available ? (st.loaded ? 'загружена в память' : 'подключена, загрузится при первом вопросе ассистенту') : 'не подключена';
       llm.innerHTML = `<span class="k">Состояние</span><span class="svc"><span class="sev-dot ${st.available ? 'ok' : 'warning'}"></span>${state}</span>`
+        + (st.profile ? `<span class="k">Профиль</span><span>${st.profile === 'light' ? 'Лёгкий' : 'Стандарт'} — выбран по памяти компьютера (${String(st.ramGb).replace('.', ',')} ГБ)</span>` : '')
         + (st.model ? `<span class="k">Файл модели</span><span>${esc(st.model)}</span>` : '')
         + (st.reason ? `<span class="k">Причина</span><span>${esc(st.reason)}</span>` : '')
         + (st.available ? '' : '<span class="k">Что это значит</span><span>Ассистент работает: списки и суммы считаются точно, а вывод составляется по шаблону.</span>');
       // поиск по смыслу: отпечатки абзацев считаются в фоне, изменённые абзацы — заново, остальные берутся готовыми
       const se = st.search;
       if (se) {
-        const state = !se.available ? 'не подключён — поиск работает по словам и синонимам'
+        const state = !se.available ? (se.reason && se.reason.includes('памяти') ? 'отключён: мало оперативной памяти — поиск работает по словам и синонимам' : 'не подключён — поиск работает по словам и синонимам')
           : se.pending ? `индексация: готово ${se.ready} из ${se.blocks} абзацев` : `готов · ${se.blocks} ${plural(se.blocks, 'абзац', 'абзаца', 'абзацев')}`;
         llm.innerHTML += `<span class="k">Поиск по смыслу</span><span class="svc"><span class="sev-dot ${se.available && !se.pending ? 'ok' : 'warning'}"></span>${state}</span>`
           + (se.model ? `<span class="k">Модель поиска</span><span>${esc(se.model)}</span>` : '');
