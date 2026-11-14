@@ -35,6 +35,11 @@ def find_embed_model() -> Optional[str]:
     return files[0] if files else None
 
 
+def _light_profile() -> bool:
+    from app.assistant.llm import profile
+    return profile() == "light"
+
+
 class Embedder:
     def __init__(self):
         self._lock = threading.Lock()
@@ -57,6 +62,8 @@ class Embedder:
             reason = "Не установлена библиотека llama-cpp-python"
         elif not path:
             reason = "Нет файла модели (.gguf) в папке ai-service/models/embed"
+        elif not os.environ.get("DOCUMENTUM_EMBED_MODEL") and _light_profile():
+            reason = "Мало оперативной памяти: поиск по смыслу отключён, работает поиск по словам и синонимам"
         return {"available": reason is None, "loaded": self._model is not None,
                 "model": os.path.basename(path) if path else None, "reason": reason}
 

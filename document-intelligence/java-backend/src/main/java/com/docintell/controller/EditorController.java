@@ -105,7 +105,7 @@ public class EditorController {
     /** Проверить документ по правилам. В теле — текущий HTML редактора (необязательно). */
     @PostMapping("/{id}/check")
     public CheckResult check(@PathVariable Long id, @RequestBody(required = false) CheckRequest request) {
-        return editorService.check(id, request == null ? null : request.html());
+        return editorService.check(id, request == null ? null : request.html(), request != null && Boolean.TRUE.equals(request.deep()));
     }
 
     @PostMapping("/{id}/export/docx")

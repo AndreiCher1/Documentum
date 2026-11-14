@@ -63,7 +63,7 @@ const API = (() => {
     version: async (id, n) => (await req(`/api/editor/documents/${id}/versions/${n}`)).json(),
     rename: (id, title) => req(`/api/editor/documents/${id}`, json('PATCH', { title })),
     search: async (params) => (await req(`/api/editor/documents/search?${params}`, {}, 30000)).json(),
-    checkDoc: async (id, html) => (await req(`/api/editor/documents/${id}/check`, json('POST', { html }), 60000)).json(),
+    checkDoc: async (id, html, deep = false) => (await req(`/api/editor/documents/${id}/check`, json('POST', { html, deep }), deep ? 900000 : 60000)).json(),
     exportDocx: async (id, html) => (await req(`/api/editor/documents/${id}/export/docx`, json('POST', { html }), 120000)).blob(),
     remove: (id) => req(`/api/documents/${id}`, { method: 'DELETE' }),
     // языковая модель на процессоре может отвечать долго — ждём до 5 минут
@@ -291,6 +291,7 @@ function setFindings(check) {
   ed.real.findings = (check.findings || []).map((f) => ({
     id: prefix + f.id, severity: f.severity, category: f.category, title: f.title, why: f.why, where: f.where,
     block: f.block != null ? 'rb' + f.block : null, before: f.quote, after: f.replacement, noteOnly: f.replacement == null,
+    ai: !!f.ai, source: f.source || null,
     raw: f,
   }));
   applyMarks();
@@ -346,22 +347,29 @@ function rangeInText(root, start, end) {
   return null;
 }
 
-async function realRunCheck(quiet = false) {
+async function realRunCheck(quiet = false, deep = false) {
   if (quiet !== true) quiet = false;          // при вызове из обработчика клика сюда приходит событие
+  if (deep !== true) deep = false;
   switchRightTab('review');
   const box = $('#review-summary');
-  box.innerHTML = `<div class="steps"><div class="step"><span class="spin"></span>Правила: реквизиты, даты, суммы, нумерация, оформление</div></div>`;
+  box.innerHTML = `<div class="steps"><div class="step"><span class="spin"></span>Правила: реквизиты, даты, суммы, нумерация, риски</div>
+    <div class="step"><span class="spin"></span>Сверка с другими документами базы</div>
+    ${deep ? '<div class="step"><span class="spin"></span>Языковая модель читает документ — это может занять одну-две минуты</div>' : ''}</div>`;
   $('#cards').innerHTML = '';
   try {
     const html = cleanHTML();
-    const check = await API.checkDoc(ed.real.id, html);
+    const check = await API.checkDoc(ed.real.id, html, deep);
+    ed.real.semantic = deep ? (check.semantic || { available: false }) : null;
     page.innerHTML = html;
     setFindings(check);
     ed.msgEdited = false;
     renderReview();
     refreshReal();
     const n = ed.real.findings.length;
-    if (!quiet) toast(n ?`Проверка завершена: ${n} ${plural(n, 'находка', 'находки', 'находок')}` : 'Проверка завершена: замечаний нет');
+    const sem = ed.real.semantic;
+    if (deep && !sem.available) toast('Языковая модель не подключена — выполнена проверка по правилам и сверка с базой');
+    else if (deep) toast(`Модель прочитала ${sem.chunks < sem.total ? `начало документа (${sem.chunks} из ${sem.total} частей)` : 'документ целиком'}: находок — ${sem.found}`);
+    else if (!quiet) toast(n ?`Проверка завершена: ${n} ${plural(n, 'находка', 'находки', 'находок')}` : 'Проверка завершена: замечаний нет');
   } catch (e) {
     toast('Проверка не выполнена: ' + e.message);
     renderReview();

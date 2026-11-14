@@ -152,10 +152,12 @@ public class AiServiceClient {
     }
 
     /** Проверка текста по правилам (AI-сервис /editor/check). */
-    public com.fasterxml.jackson.databind.JsonNode checkDocument(String html, String documentType) {
+    public com.fasterxml.jackson.databind.JsonNode checkDocument(String html, String documentType, Long docId, boolean deep) {
         try {
+            // docId — для сверки с остальными документами базы, deep — смысловая проверка языковой моделью
             return restTemplate.postForObject(aiServiceUrl + "/editor/check",
-                    java.util.Map.of("html", html == null ? "" : html, "documentType", documentType == null ? "" : documentType),
+                    java.util.Map.of("html", html == null ? "" : html, "documentType", documentType == null ? "" : documentType,
+                            "docId", docId, "deep", deep),
                     com.fasterxml.jackson.databind.JsonNode.class);
         } catch (RestClientException e) {
             logger.error("Ошибка при вызове AI-сервиса /editor/check: {}", e.getMessage());

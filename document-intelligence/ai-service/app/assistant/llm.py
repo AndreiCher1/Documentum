@@ -20,14 +20,46 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "models")
+LIGHT_DIR = os.path.join(MODELS_DIR, "light")
+LOW_RAM_GB = 12          # меньше — «лёгкий» профиль: маленькая модель, без модели смыслового поиска
+
+
+def ram_gb() -> float:
+    """Объём оперативной памяти компьютера, ГБ (0 — узнать не удалось)."""
+    try:
+        import ctypes
+
+        class Mem(ctypes.Structure):
+            _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong)] + \
+                       [(n, ctypes.c_ulonglong) for n in ("ullTotalPhys", "ullAvailPhys", "ullTotalPageFile", "ullAvailPageFile",
+                                                          "ullTotalVirtual", "ullAvailVirtual", "ullAvailExtendedVirtual")]
+        m = Mem()
+        m.dwLength = ctypes.sizeof(Mem)
+        ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(m))
+        return m.ullTotalPhys / 2 ** 30
+    except Exception:
+        return 0.0
+
+
+def profile() -> str:
+    """«light» для компьютеров с малым объёмом памяти, иначе «standard». Можно задать явно: DOCUMENTUM_PROFILE."""
+    forced = (os.environ.get("DOCUMENTUM_PROFILE") or "").lower()
+    if forced in ("light", "standard"):
+        return forced
+    ram = ram_gb()
+    return "light" if 0 < ram < LOW_RAM_GB else "standard"
 
 
 def find_model() -> Optional[str]:
+    """Файл модели: явный путь из DOCUMENTUM_LLM_MODEL; иначе по профилю — лёгкая модель из models/light
+    на слабом компьютере, обычная из models на остальных. Если модели своего профиля нет, берётся другая."""
     path = os.environ.get("DOCUMENTUM_LLM_MODEL")
     if path and os.path.isfile(path):
         return path
-    files = sorted(glob.glob(os.path.join(MODELS_DIR, "*.gguf")))
-    return files[0] if files else None
+    standard = sorted(glob.glob(os.path.join(MODELS_DIR, "*.gguf")))
+    light = sorted(glob.glob(os.path.join(LIGHT_DIR, "*.gguf")))
+    order = light + standard if profile() == "light" else standard + light
+    return order[0] if order else None
 
 
 def _library_installed() -> bool:
@@ -52,7 +84,8 @@ class LocalLLM:
         elif not path:
             reason = "Нет файла модели (.gguf) в папке ai-service/models"
         return {"available": reason is None, "loaded": self._model is not None,
-                "model": os.path.basename(path) if path else None, "reason": reason}
+                "model": os.path.basename(path) if path else None, "reason": reason,
+                "profile": profile(), "ramGb": round(ram_gb(), 1)}
 
     def _load(self):
         if self._model is None and not self._failed:

@@ -318,7 +318,14 @@ DOC_TASK = ("Ответь на вопрос по сути в 2–5 предло�
             "ответь одной фразой «В документе это не указано» и ничего не пересказывай.")
 
 
-def _with_sections(blocks: List[str], frags: List[dict]) -> List[dict]:
+def _light_model(llm) -> bool:
+    try:
+        return bool(llm) and llm.status().get("profile") == "light"
+    except Exception:
+        return False
+
+
+def _with_sections(blocks: List[str], frags: List[dict], budget: int = 0) -> List[dict]:
     """Если к вопросу подошёл заголовок раздела, в модель уходит и текст раздела — иначе она ответит одним заголовком.
     Разворачиваются два самых подходящих заголовка; абзацы, попавшие внутрь развёрнутого раздела, отдельно не дублируются."""
     heads = [i for i, b in enumerate(blocks) if b.strip() and len(b.strip()) < 90 and HEADING.match(b)]
@@ -349,7 +356,7 @@ def _with_sections(blocks: List[str], frags: List[dict]) -> List[dict]:
             f["section"] = True
     out = [f for f in frags if f["block"] not in covered or f.get("section")]
     # не выходим за размер контекста: сначала убираем наименее подходящие абзацы
-    while len(out) > 1 and sum(len(f["text"]) for f in out) > CONTEXT_CHARS:
+    while len(out) > 1 and sum(len(f["text"]) for f in out) > (budget or CONTEXT_CHARS):
         out.remove(min(out, key=lambda f: (bool(f.get("section")), f["score"])))
     return out
 
@@ -400,16 +407,22 @@ def ask_document(question: str, doc_id: int, index, llm=None) -> dict:
         return {**base, "found": False, "steps": ["Текст документа не найден в индексе"], "sources": [], "generated": False,
                 "summary": "Не вижу текста этого документа. Сохраните документ и задайте вопрос ещё раз."}
     terms = _terms(question)
-    matched = _fragments(blocks, terms, 8, 600, _sims(index, doc_id, question))
+    # маленькая модель (профиль для слабых компьютеров) на большом куске текста теряется и начинает перечислять всё подряд —
+    # ей даём меньше мест и без оглавления
+    light = _light_model(llm)
+    matched = _fragments(blocks, terms, 4 if light else 8, 600, _sims(index, doc_id, question))
     filled = [i for i, b in enumerate(blocks) if b.strip()]
     if sum(len(b) for b in blocks) <= WHOLE_DOC:
         by_block = {f["block"]: f for f in matched}
         frags = [{**(by_block.get(i) or {"block": i, "start": None, "end": None, "score": 0}), "text": blocks[i].strip()} for i in filled]
         note = "Прочитал документ целиком"
     else:
-        frags = _with_outline(blocks, _with_sections(blocks, matched))
+        frags = _with_sections(blocks, matched, 2200 if light else CONTEXT_CHARS)
+        if not light:
+            frags = _with_outline(blocks, frags)
         picked = len([f for f in frags if not f.get("outline")])
-        note = f"Выбрал {picked} {_plural(picked, ('подходящее место', 'подходящих места', 'подходящих мест'))} из {len(filled)} абзацев и оглавление"
+        note = f"Выбрал {picked} {_plural(picked, ('подходящее место', 'подходящих места', 'подходящих мест'))} из {len(filled)} абзацев" \
+               + ("" if light else " и оглавление")
         if any(f.get("section") for f in frags):
             note += ", подходящие разделы прочитал целиком"
     for n, f in enumerate(frags, 1):

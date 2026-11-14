@@ -55,10 +55,11 @@ public class EditorService {
      * или текущее содержимое документа. Результат сохраняется для реестра и следующего открытия.
      */
     @Transactional
-    public CheckResult check(Long id, String html) {
+    public CheckResult check(Long id, String html, boolean deep) {
         Document doc = find(id);
         String text = html != null ? checkHtml(html) : currentHtml(doc);
-        com.fasterxml.jackson.databind.JsonNode result = aiServiceClient.checkDocument(text, doc.getDocumentType().name());
+        ensureIndexed();        // сверка с базой берёт тексты других документов из поискового индекса
+        com.fasterxml.jackson.databind.JsonNode result = aiServiceClient.checkDocument(text, doc.getDocumentType().name(), id, deep);
         com.fasterxml.jackson.databind.JsonNode counts = result.path("counts");
         doc.setCheckJson(result.path("findings").toString());
         doc.setCheckCritical(counts.path("critical").asInt());
@@ -68,7 +69,10 @@ public class EditorService {
         documentRepository.save(doc);
         logger.info("Документ {} проверен: критично {}, замечаний {}, советов {}", id,
                 doc.getCheckCritical(), doc.getCheckWarning(), doc.getCheckInfo());
-        return lastCheck(doc);
+        CheckResult saved = lastCheck(doc);
+        return saved == null ? null : new CheckResult(saved.findings(), saved.critical(), saved.warning(), saved.info(), saved.checkedAt(),
+                result.path("semantic").isMissingNode() ? null : result.get("semantic"),
+                result.path("cross").isMissingNode() ? null : result.get("cross"));
     }
 
     private CheckResult lastCheck(Document doc) {
@@ -77,7 +81,7 @@ public class EditorService {
         }
         try {
             return new CheckResult(objectMapper.readTree(doc.getCheckJson()), nz(doc.getCheckCritical()), nz(doc.getCheckWarning()),
-                    nz(doc.getCheckInfo()), doc.getCheckedAt());
+                    nz(doc.getCheckInfo()), doc.getCheckedAt(), null, null);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             logger.warn("Не удалось прочитать сохранённую проверку документа {}: {}", doc.getId(), e.getMessage());
             return null;
@@ -391,7 +395,7 @@ public class EditorService {
     /** Проверка сразу после загрузки. Если сервис анализа недоступен, документ всё равно сохраняется. */
     private void autoCheck(Document doc, String html) {
         try {
-            check(doc.getId(), html);
+            check(doc.getId(), html, false);
         } catch (RuntimeException e) {
             logger.warn("Автопроверка документа {} не выполнена: {}", doc.getId(), e.getMessage());
         }
